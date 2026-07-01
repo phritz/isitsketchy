@@ -1,5 +1,6 @@
 import { Anchor, Container, Text, Title } from "@mantine/core";
 import { HomeSearch } from "@/app/home-search";
+import { NpmSearch } from "@/app/home-npm-search";
 
 export default function Home() {
   return (
@@ -11,7 +12,11 @@ export default function Home() {
       <Anchor href="/ui/sources/github" mt="md" display="block">
         GitHub cache management
       </Anchor>
+      <Anchor href="/ui/sources/npm" display="block">
+        npm cache management
+      </Anchor>
       <HomeSearch />
+      <NpmSearch />
     </Container>
   );
 }

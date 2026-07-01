@@ -10,35 +10,32 @@ import {
   TextInput,
 } from "@mantine/core";
 import {
-  getGithubRepo,
-  type GithubRepoData,
-} from "@/app/api/sources/github/client";
+  fetchNpmPackage,
+  type NpmPackageData,
+} from "@/app/api/sources/npm/client";
 
-const ANTHROPIC_SDK_REPO_URL: string =
-  "https://github.com/anthropics/anthropic-sdk-typescript";
-const IS_IT_SKETCHY_REPO_URL: string =
-  "https://github.com/phritz/isitsketchy";
+const ANTHROPIC_SDK_PACKAGE_NAME: string = "@anthropic-ai/sdk";
 
-export function HomeSearch() {
-  const [url, setUrl] = useState<string>("");
+export function NpmSearch() {
+  const [name, setName] = useState<string>("");
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<GithubRepoData | null>(null);
+  const [result, setResult] = useState<NpmPackageData | null>(null);
 
   async function analyze(target: string): Promise<void> {
     const trimmed: string = target.trim();
     if (trimmed.length === 0) {
       return;
     }
-    setUrl(trimmed);
+    setName(trimmed);
     setLoading(true);
     setError(null);
     setResult(null);
     try {
-      const data = await getGithubRepo(trimmed);
+      const data = await fetchNpmPackage(trimmed);
       setResult(data);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to fetch repo");
+      setError(e instanceof Error ? e.message : "Failed to fetch package");
     } finally {
       setLoading(false);
     }
@@ -49,34 +46,27 @@ export function HomeSearch() {
       <Group>
         <Button
           variant="light"
-          onClick={() => analyze(ANTHROPIC_SDK_REPO_URL)}
+          onClick={() => analyze(ANTHROPIC_SDK_PACKAGE_NAME)}
           loading={loading}
         >
-          Analyze Anthropic SDK repo
-        </Button>
-        <Button
-          variant="light"
-          onClick={() => analyze(IS_IT_SKETCHY_REPO_URL)}
-          loading={loading}
-        >
-          Analyze &apos;Is it sketchy&apos; repo
+          Analyze Anthropic SDK package
         </Button>
       </Group>
 
       <Group align="flex-end">
         <TextInput
-          label="GitHub repo URL"
-          placeholder="https://github.com/owner/repo"
-          value={url}
-          onChange={(e) => setUrl(e.currentTarget.value)}
+          label="npm package name"
+          placeholder="express"
+          value={name}
+          onChange={(e) => setName(e.currentTarget.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter") {
-              void analyze(url);
+              void analyze(name);
             }
           }}
           style={{ flex: 1 }}
         />
-        <Button onClick={() => analyze(url)} loading={loading}>
+        <Button onClick={() => analyze(name)} loading={loading}>
           Analyze
         </Button>
       </Group>
@@ -85,7 +75,7 @@ export function HomeSearch() {
 
       {result ? (
         <Stack gap="xs">
-          <Text fw={600}>{result.repo.full_name}</Text>
+          <Text fw={600}>{result.packument.name}</Text>
           <Code block>{JSON.stringify(result, null, 2)}</Code>
         </Stack>
       ) : null}

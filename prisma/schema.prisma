@@ -15,3 +15,12 @@ model GithubRepo {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
+
+model NpmPackage {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  data      Json
+  fetchedAt DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
