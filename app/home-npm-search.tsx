@@ -55,7 +55,7 @@ export function NpmSearch() {
 
       <Group align="flex-end">
         <TextInput
-          label="npm package name"
+          label="Analyze an npm package by name"
           placeholder="express"
           value={name}
           onChange={(e) => setName(e.currentTarget.value)}

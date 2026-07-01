@@ -33,11 +33,11 @@ export type ErrorResponse = {
   error: { message: string };
 };
 
-const ENDPOINT: string = "/api/sources/github";
+export const ENDPOINT: string = "/api/sources/github";
 
 // Surface the server's `{ ok: false, error }` message instead of a generic
 // axios status string.
-function toError(error: unknown): Error {
+export function toError(error: unknown): Error {
   if (error instanceof AxiosError) {
     const data = error.response?.data as ErrorResponse | undefined;
     if (data && data.ok === false) {

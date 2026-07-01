@@ -5,6 +5,8 @@ Conventions for working in the isitsketchy project. Follow these unless a task e
 ## Architecture
 
 - This is a multi-page application (MPA).
+- The main page is `/ui` (the root `/` redirects to it).
+- Every `/ui/*` subpage must include a back link to the main page (`<Anchor href="/ui">← Home</Anchor>`), placed in the upper left above the page title.
 
 ## Planning
 

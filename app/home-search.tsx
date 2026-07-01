@@ -1,18 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import {
-  Button,
-  Code,
-  Group,
-  Stack,
-  Text,
-  TextInput,
-} from "@mantine/core";
-import {
-  getGithubRepo,
-  type GithubRepoData,
-} from "@/app/api/sources/github/client";
+import { useRouter } from "next/navigation";
+import { Button, Group, Stack, Text, TextInput } from "@mantine/core";
+import { createAnalysis } from "@/app/api/analysis/client";
 
 const ANTHROPIC_SDK_REPO_URL: string =
   "https://github.com/anthropics/anthropic-sdk-typescript";
@@ -20,10 +11,10 @@ const IS_IT_SKETCHY_REPO_URL: string =
   "https://github.com/phritz/isitsketchy";
 
 export function HomeSearch() {
+  const router = useRouter();
   const [url, setUrl] = useState<string>("");
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<GithubRepoData | null>(null);
 
   async function analyze(target: string): Promise<void> {
     const trimmed: string = target.trim();
@@ -33,13 +24,11 @@ export function HomeSearch() {
     setUrl(trimmed);
     setLoading(true);
     setError(null);
-    setResult(null);
     try {
-      const data = await getGithubRepo(trimmed);
-      setResult(data);
+      const { id } = await createAnalysis(trimmed);
+      router.push(`/ui/analysis/${id}`);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to fetch repo");
-    } finally {
+      setError(e instanceof Error ? e.message : "Failed to start analysis");
       setLoading(false);
     }
   }
@@ -59,7 +48,7 @@ export function HomeSearch() {
           onClick={() => analyze(IS_IT_SKETCHY_REPO_URL)}
           loading={loading}
         >
-          Analyze &apos;Is it sketchy&apos; repo
+          Analyze &apos;Is It Sketchy?&apos; repo
         </Button>
       </Group>
 
@@ -82,13 +71,6 @@ export function HomeSearch() {
       </Group>
 
       {error ? <Text c="red">{error}</Text> : null}
-
-      {result ? (
-        <Stack gap="xs">
-          <Text fw={600}>{result.repo.full_name}</Text>
-          <Code block>{JSON.stringify(result, null, 2)}</Code>
-        </Stack>
-      ) : null}
     </Stack>
   );
 }

@@ -24,3 +24,45 @@ model NpmPackage {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
+
+model AnalysisRun {
+  id        String            @id @default(cuid())
+  repoUrl   String
+  error     Json?
+  subjects  AnalysisSubject[]
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+}
+
+model AnalysisSubject {
+  id            String           @id @default(cuid())
+  analysisRunId String
+  run           AnalysisRun      @relation(fields: [analysisRunId], references: [id], onDelete: Cascade)
+  type          String
+  name          String
+  githubRepoId  String?
+  npmPackageId  String?
+  repoUrl       String?
+  error         Json?
+  results       AnalysisResult[]
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  @@unique([analysisRunId, type, name])
+  @@index([analysisRunId])
+}
+
+model AnalysisResult {
+  id                String          @id @default(cuid())
+  analysisSubjectId String
+  subject           AnalysisSubject @relation(fields: [analysisSubjectId], references: [id], onDelete: Cascade)
+  signalId          String
+  name              String
+  status            String          @default("pending")
+  riskScore         String?
+  comment           String?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  @@index([analysisSubjectId])
+}

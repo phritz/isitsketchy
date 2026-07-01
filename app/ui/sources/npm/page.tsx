@@ -82,10 +82,8 @@ export default function NpmCachePage() {
   return (
     <Container size="md" py="xl">
       <Stack gap="lg">
-        <Group justify="space-between" align="center">
-          <Title order={1}>npm cache</Title>
-          <Anchor href="/">Home</Anchor>
-        </Group>
+        <Anchor href="/ui">← Home</Anchor>
+        <Title order={1}>npm cache</Title>
 
         <Group justify="space-between" align="center">
           <Text c="dimmed">

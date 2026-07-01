@@ -16,31 +16,58 @@ export default function Home() {
       <Title order={1}>Is It Sketchy?</Title>
       <Text mt="md">
         Is It Sketchy? shows trustworthiness signals for a GitHub repo or npm
-        package.
+        package, evaluating trustworthiness based on repo and package metadata.
       </Text>
-      <Text mt="xs" c="dimmed">
-        Currently only works for direct dependencies.
+      <Text mt="md">
+        It currently only works for direct dependencies. Repo metadata and
+        package metadata are cached, so if you want to fetch fresh data, clear
+        the cache with the cache management links at the bottom of the page.
       </Text>
+
+      <Group mt="md">
+        <Anchor href="/ui/analysis">View past analyses</Anchor>
+      </Group>
 
       <Stack gap="xl" mt="xl">
         <section>
-          <Group justify="space-between" align="center">
-            <Title order={2}>GitHub repo</Title>
-            <Anchor href="/ui/sources/github">GitHub cache management</Anchor>
-          </Group>
+          <Title order={2}>Analyze a repo</Title>
           <HomeSearch />
         </section>
 
         <Divider />
 
         <section>
-          <Group justify="space-between" align="center">
-            <Title order={2}>npm package</Title>
-            <Anchor href="/ui/sources/npm">npm cache management</Anchor>
-          </Group>
+          <Title order={2}>Analyze an npm package</Title>
           <NpmSearch />
         </section>
       </Stack>
+
+      <Divider mt="xl" />
+
+      <Stack gap={4} mt="xl">
+        <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
+          Debug
+        </Text>
+        <Group gap="md">
+          <Anchor href="/ui/sources/github" size="xs" c="dimmed">
+            GitHub cache management
+          </Anchor>
+          <Anchor href="/ui/sources/npm" size="xs" c="dimmed">
+            npm cache management
+          </Anchor>
+        </Group>
+      </Stack>
+
+      <Text size="xs" c="dimmed" mt="xl">
+        <Anchor
+          href="https://github.com/phritz/isitsketchy"
+          target="_blank"
+          rel="noreferrer"
+          c="dimmed"
+        >
+          Is It Sketchy? on GitHub
+        </Anchor>
+      </Text>
     </Container>
   );
 }
