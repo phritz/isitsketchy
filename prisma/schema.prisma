@@ -26,12 +26,14 @@ model NpmPackage {
 }
 
 model AnalysisRun {
-  id        String            @id @default(cuid())
-  repoUrl   String
-  error     Json?
-  subjects  AnalysisSubject[]
-  createdAt DateTime          @default(now())
-  updatedAt DateTime          @updatedAt
+  id          String            @id @default(cuid())
+  rootType    String            @default("repo") // RootType union ("repo"|"package")
+  repoUrl     String?           // set when rootType == "repo"
+  packageName String?           // set when rootType == "package"
+  error       Json?
+  subjects    AnalysisSubject[]
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
 }
 
 model AnalysisSubject {

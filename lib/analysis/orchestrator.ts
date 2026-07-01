@@ -295,36 +295,56 @@ async function computePendingResults(discovery: Discovery): Promise<void> {
   }
 }
 
-async function discoverAndCompute(runId: string): Promise<void> {
-  const run = await prisma.analysisRun.findUnique({ where: { id: runId } });
-  if (run === null) {
-    return;
-  }
+// A fatal, pre-subject failure (root repo/package unresolvable) recorded on the
+// run itself so the detail page shows a run-level error and no subjects.
+async function setFatalRunError(
+  runId: string,
+  code: string,
+  message: string,
+): Promise<void> {
+  const fatal: SubjectError = { code, message };
+  await prisma.analysisRun.update({
+    where: { id: runId },
+    data: { error: fatal as unknown as Prisma.InputJsonValue },
+  });
+}
 
-  // Phase 1: resolve the source repo. Failure here is fatal for the run.
+// A package root distills only `dependencies` + `devDependencies` in its
+// packument blob (unlike the repo path, which reads all four groups from the
+// raw package.json). Dedup across the two groups.
+function enumeratePackageDeps(blob: NpmPackageData): string[] {
+  const names: Set<string> = new Set<string>();
+  const latest: NpmPackageData["latest"] = blob.latest;
+  if (latest !== null) {
+    for (const name of Object.keys(latest.dependencies)) {
+      names.add(name);
+    }
+    for (const name of Object.keys(latest.devDependencies)) {
+      names.add(name);
+    }
+  }
+  return [...names];
+}
+
+// Repo-rooted discovery: source repo (fatal on failure) + its own package +
+// each direct dependency. Returns false when the root repo is unresolvable.
+async function discoverRepoRoot(
+  discovery: Discovery,
+  repoUrl: string,
+): Promise<boolean> {
   let sourceRepoBlob: GithubRepoData;
   try {
-    sourceRepoBlob = await getGithubRepo(run.repoUrl);
+    sourceRepoBlob = await getGithubRepo(repoUrl);
   } catch (caught) {
-    const fatal: SubjectError = {
-      code: "repo_unresolvable",
-      message: errorMessage(caught),
-    };
-    await prisma.analysisRun.update({
-      where: { id: runId },
-      data: { error: fatal as unknown as Prisma.InputJsonValue },
-    });
-    return;
+    await setFatalRunError(
+      discovery.runId,
+      "repo_unresolvable",
+      errorMessage(caught),
+    );
+    return false;
   }
 
-  const discovery: Discovery = {
-    runId,
-    subjectBlobs: new Map<string, SubjectBlob>(),
-    repoUrlToSubjectId: new Map<string, string>(),
-    packageNames: new Set<string>(),
-  };
-
-  const sourceNormalized: string = normalizeUrl(run.repoUrl);
+  const sourceNormalized: string = normalizeUrl(repoUrl);
   await ensureRepoSubject(discovery, sourceNormalized, sourceRepoBlob);
 
   // The source's own package (optional) + each direct dependency.
@@ -340,6 +360,83 @@ async function discoverAndCompute(runId: string): Promise<void> {
 
   for (const depName of enumerateDirectDeps(packageJson)) {
     await addPackageSubject(discovery, depName, false);
+  }
+  return true;
+}
+
+// Package-rooted discovery: the root package (fatal on failure) + its linked
+// repo + each direct dependency (each with its own linked repo). Returns false
+// when the root package is unresolvable.
+async function discoverPackageRoot(
+  discovery: Discovery,
+  packageName: string,
+): Promise<boolean> {
+  let rootBlob: NpmPackageData;
+  try {
+    rootBlob = await getNpmPackage(packageName);
+  } catch (caught) {
+    await setFatalRunError(
+      discovery.runId,
+      "package_unresolvable",
+      errorMessage(caught),
+    );
+    return false;
+  }
+
+  discovery.packageNames.add(packageName);
+  const rowId: string | null = await npmRowId(packageName);
+  const rawRepoUrl: string | null =
+    rootBlob.packument.repository?.url ?? null;
+  const subjectId: string = await createSubjectWithResults({
+    runId: discovery.runId,
+    type: "package",
+    name: packageName,
+    githubRepoId: null,
+    npmPackageId: rowId,
+    repoUrl: rawRepoUrl,
+    error: null,
+    signals: PACKAGE_SIGNALS as SignalDef<unknown>[],
+  });
+  discovery.subjectBlobs.set(subjectId, { type: "package", blob: rootBlob });
+  await linkPackageRepo(discovery, rawRepoUrl);
+
+  for (const depName of enumeratePackageDeps(rootBlob)) {
+    await addPackageSubject(discovery, depName, false);
+  }
+  return true;
+}
+
+async function discoverAndCompute(runId: string): Promise<void> {
+  const run = await prisma.analysisRun.findUnique({ where: { id: runId } });
+  if (run === null) {
+    return;
+  }
+
+  const discovery: Discovery = {
+    runId,
+    subjectBlobs: new Map<string, SubjectBlob>(),
+    repoUrlToSubjectId: new Map<string, string>(),
+    packageNames: new Set<string>(),
+  };
+
+  // Phase 1: discover subjects from the run's root. A fatal root failure is
+  // recorded on the run and stops the run before Phase 2.
+  let ok: boolean;
+  if (run.rootType === "package") {
+    if (run.packageName === null) {
+      await setFatalRunError(runId, "invalid_run", "Missing packageName");
+      return;
+    }
+    ok = await discoverPackageRoot(discovery, run.packageName);
+  } else {
+    if (run.repoUrl === null) {
+      await setFatalRunError(runId, "invalid_run", "Missing repoUrl");
+      return;
+    }
+    ok = await discoverRepoRoot(discovery, run.repoUrl);
+  }
+  if (!ok) {
+    return;
   }
 
   // Phase 2: compute every pending result sequentially.

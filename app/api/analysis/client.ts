@@ -19,6 +19,10 @@ export type ResultStatus = (typeof RESULT_STATUSES)[number];
 export const SUBJECT_TYPES = ["repo", "package"] as const;
 export type SubjectType = (typeof SUBJECT_TYPES)[number];
 
+// What an AnalysisRun is rooted on: a GitHub repo URL or an npm package name.
+export const ROOT_TYPES = ["repo", "package"] as const;
+export type RootType = (typeof ROOT_TYPES)[number];
+
 // Both a subject's status and the run's status are derived from results (there
 // is no stored status column). See plan/analysis.md.
 export function deriveStatus(
@@ -62,7 +66,9 @@ export type AnalysisSubjectData = {
 
 export type AnalysisRunData = {
   id: string;
-  repoUrl: string;
+  rootType: RootType;
+  repoUrl: string | null; // set when rootType == "repo"
+  packageName: string | null; // set when rootType == "package"
   error: AnalysisError | null;
   status: ResultStatus;
   subjects: AnalysisSubjectData[];
@@ -72,15 +78,19 @@ export type AnalysisRunData = {
 
 export type AnalysisRunSummary = {
   id: string;
-  repoUrl: string;
+  rootType: RootType;
+  repoUrl: string | null;
+  packageName: string | null;
   status: ResultStatus;
   subjectCount: number;
   createdAt: string;
   updatedAt: string;
 };
 
+// Exactly one of `repoUrl` / `packageName` is set, per `rootType`.
 export type CreateAnalysisRequest = {
-  repoUrl: string;
+  repoUrl?: string;
+  packageName?: string;
 };
 
 export type CreateAnalysisResponse = {
@@ -120,6 +130,21 @@ export function toError(error: unknown): Error {
 export async function createAnalysis(repoUrl: string): Promise<{ id: string }> {
   try {
     const body: CreateAnalysisRequest = { repoUrl };
+    const res = await browserApiClient.post<CreateAnalysisResponse>(
+      ENDPOINT,
+      body,
+    );
+    return res.data.data;
+  } catch (error) {
+    throw toError(error);
+  }
+}
+
+export async function createPackageAnalysis(
+  packageName: string,
+): Promise<{ id: string }> {
+  try {
+    const body: CreateAnalysisRequest = { packageName };
     const res = await browserApiClient.post<CreateAnalysisResponse>(
       ENDPOINT,
       body,

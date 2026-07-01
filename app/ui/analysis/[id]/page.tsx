@@ -127,6 +127,19 @@ function subjectWebUrl(subject: AnalysisSubjectData): string {
   return `https://www.npmjs.com/package/${subject.name}`;
 }
 
+// The run header links to whatever the run is rooted on: a GitHub repo URL or
+// an npm package (linked to its npmjs.com page).
+function runRoot(run: AnalysisRunData): { url: string; label: string } {
+  if (run.rootType === "package" && run.packageName !== null) {
+    return {
+      url: `https://www.npmjs.com/package/${run.packageName}`,
+      label: run.packageName,
+    };
+  }
+  const url: string = run.repoUrl ?? "";
+  return { url, label: url };
+}
+
 function isTerminal(status: ResultStatus): boolean {
   return status === "completed" || status === "failed";
 }
@@ -463,7 +476,7 @@ export default function AnalysisDetailPage() {
       <Stack gap="lg">
         <Group justify="space-between" align="center">
           <Anchor href="/ui">← Home</Anchor>
-          <Anchor href="/ui/signals">What do these signals mean?</Anchor>
+          <Anchor href="/ui/signals" target="_blank" rel="noopener noreferrer">What do these signals mean?</Anchor>
         </Group>
 
         <Title order={1}>Analysis</Title>
@@ -476,12 +489,12 @@ export default function AnalysisDetailPage() {
           <Stack gap="xl">
             <Group gap="xs" align="center">
               <Anchor
-                href={run.repoUrl}
+                href={runRoot(run).url}
                 target="_blank"
                 rel="noreferrer"
                 fw={600}
               >
-                {run.repoUrl}
+                {runRoot(run).label}
               </Anchor>
               {terminal ? <StatusText status={run.status} /> : null}
               {stale ? (

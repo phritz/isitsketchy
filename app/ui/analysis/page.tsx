@@ -6,6 +6,7 @@ import {
   Badge,
   Container,
   Group,
+  Loader,
   Stack,
   Table,
   Text,
@@ -34,6 +35,7 @@ function statusColor(status: ResultStatus): string {
 export default function AnalysisListPage() {
   const [rows, setRows] = useState<AnalysisRunSummary[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
 
   useEffect(() => {
     let active: boolean = true;
@@ -47,6 +49,10 @@ export default function AnalysisListPage() {
         if (active) {
           setError(e instanceof Error ? e.message : "Failed to load analyses");
         }
+      } finally {
+        if (active) {
+          setLoading(false);
+        }
       }
     })();
     return () => {
@@ -57,24 +63,31 @@ export default function AnalysisListPage() {
   return (
     <Container size="md" py="xl">
       <Stack gap="lg">
-        <Group justify="space-between" align="center">
-          <Title order={1}>Analyses</Title>
-          <Anchor href="/ui">Home</Anchor>
-        </Group>
+        <Anchor href="/ui">← Home</Anchor>
+        <Title order={1}>Analyses</Title>
 
         {error ? <Text c="red">{error}</Text> : null}
 
         <Table striped withTableBorder>
           <Table.Thead>
             <Table.Tr>
-              <Table.Th>Repo</Table.Th>
+              <Table.Th>Root</Table.Th>
               <Table.Th>Status</Table.Th>
               <Table.Th>Subjects</Table.Th>
               <Table.Th>Created</Table.Th>
             </Table.Tr>
           </Table.Thead>
           <Table.Tbody>
-            {rows.length === 0 ? (
+            {loading ? (
+              <Table.Tr>
+                <Table.Td colSpan={4}>
+                  <Group gap="xs">
+                    <Loader size="sm" />
+                    <Text c="dimmed">Loading analyses…</Text>
+                  </Group>
+                </Table.Td>
+              </Table.Tr>
+            ) : rows.length === 0 ? (
               <Table.Tr>
                 <Table.Td colSpan={4}>
                   <Text c="dimmed">No analyses yet.</Text>
@@ -85,7 +98,7 @@ export default function AnalysisListPage() {
                 <Table.Tr key={row.id}>
                   <Table.Td>
                     <Anchor href={`/ui/analysis/${row.id}`}>
-                      {row.repoUrl}
+                      {row.packageName ?? row.repoUrl}
                     </Anchor>
                   </Table.Td>
                   <Table.Td>

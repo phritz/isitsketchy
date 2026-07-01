@@ -1,28 +1,19 @@
 "use client";
 
 import { useState } from "react";
-import {
-  Button,
-  Code,
-  Group,
-  Stack,
-  Text,
-  TextInput,
-} from "@mantine/core";
-import {
-  fetchNpmPackage,
-  type NpmPackageData,
-} from "@/app/api/sources/npm/client";
+import { useRouter } from "next/navigation";
+import { Button, Group, Stack, Text, TextInput } from "@mantine/core";
+import { createPackageAnalysis } from "@/app/api/analysis/client";
 
 const ANTHROPIC_SDK_PACKAGE_NAME: string = "@anthropic-ai/sdk";
 
 type PendingSource = "anthropic" | "input";
 
 export function NpmSearch() {
+  const router = useRouter();
   const [name, setName] = useState<string>("");
   const [pending, setPending] = useState<PendingSource | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<NpmPackageData | null>(null);
 
   async function analyze(target: string, source: PendingSource): Promise<void> {
     const trimmed: string = target.trim();
@@ -32,13 +23,11 @@ export function NpmSearch() {
     setName(trimmed);
     setPending(source);
     setError(null);
-    setResult(null);
     try {
-      const data = await fetchNpmPackage(trimmed);
-      setResult(data);
+      const { id } = await createPackageAnalysis(trimmed);
+      router.push(`/ui/analysis/${id}`);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to fetch package");
-    } finally {
+      setError(e instanceof Error ? e.message : "Failed to start analysis");
       setPending(null);
     }
   }
@@ -79,13 +68,6 @@ export function NpmSearch() {
       </Group>
 
       {error ? <Text c="red">{error}</Text> : null}
-
-      {result ? (
-        <Stack gap="xs">
-          <Text fw={600}>{result.packument.name}</Text>
-          <Code block>{JSON.stringify(result, null, 2)}</Code>
-        </Stack>
-      ) : null}
     </Stack>
   );
 }

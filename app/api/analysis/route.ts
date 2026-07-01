@@ -2,6 +2,7 @@ import { NextRequest, NextResponse, after } from "next/server";
 import { prisma } from "@/lib/db";
 import { Prisma } from "@/lib/generated/prisma/client";
 import { GithubFetchError, normalizeUrl, parseOwnerRepo } from "@/lib/github";
+import { NpmFetchError, validatePackageName } from "@/lib/npm";
 import { runAnalysis } from "@/lib/analysis/orchestrator";
 import {
   deriveStatus,
@@ -17,6 +18,7 @@ import {
   type ListAnalysesResponse,
   type ResultStatus,
   type RiskScore,
+  type RootType,
   type SubjectType,
 } from "./client";
 
@@ -102,21 +104,32 @@ async function createRun(
   const body = (await request.json()) as Partial<CreateAnalysisRequest>;
   const rawUrl: string =
     typeof body.repoUrl === "string" ? body.repoUrl.trim() : "";
-  if (rawUrl.length === 0) {
-    return errorResponse("repoUrl is required", 400);
+  const rawPackageName: string =
+    typeof body.packageName === "string" ? body.packageName.trim() : "";
+
+  if (rawUrl.length === 0 && rawPackageName.length === 0) {
+    return errorResponse("repoUrl or packageName is required", 400);
   }
 
-  let normalized: string;
-  try {
-    normalized = normalizeUrl(rawUrl);
-    parseOwnerRepo(normalized);
-  } catch {
-    return errorResponse("invalid_url", 400);
+  const data: { rootType: RootType; repoUrl?: string; packageName?: string } =
+    rawPackageName.length > 0
+      ? { rootType: "package", packageName: rawPackageName }
+      : { rootType: "repo" };
+
+  if (rawPackageName.length > 0) {
+    validatePackageName(rawPackageName);
+  } else {
+    let normalized: string;
+    try {
+      normalized = normalizeUrl(rawUrl);
+      parseOwnerRepo(normalized);
+    } catch {
+      return errorResponse("invalid_url", 400);
+    }
+    data.repoUrl = normalized;
   }
 
-  const run = await prisma.analysisRun.create({
-    data: { repoUrl: normalized },
-  });
+  const run = await prisma.analysisRun.create({ data });
 
   after(() => runAnalysis(run.id));
 
@@ -153,7 +166,9 @@ async function getRun(
 
   const data: AnalysisRunData = {
     id: run.id,
+    rootType: run.rootType as RootType,
     repoUrl: run.repoUrl,
+    packageName: run.packageName,
     error: runError,
     status,
     subjects,
@@ -186,7 +201,9 @@ async function listRuns(): Promise<NextResponse<ListAnalysesResponse>> {
       runError !== null ? "failed" : deriveStatus(allResults);
     return {
       id: run.id,
+      rootType: run.rootType as RootType,
       repoUrl: run.repoUrl,
+      packageName: run.packageName,
       status,
       subjectCount: run.subjects.length,
       createdAt: run.createdAt.toISOString(),
@@ -206,7 +223,7 @@ export async function POST(
   try {
     return await createRun(request);
   } catch (error) {
-    if (error instanceof GithubFetchError) {
+    if (error instanceof GithubFetchError || error instanceof NpmFetchError) {
       return errorResponse(error.code, error.status);
     }
     const message = error instanceof Error ? error.message : "Unknown error";
