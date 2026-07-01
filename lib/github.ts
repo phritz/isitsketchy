@@ -10,7 +10,9 @@ import { getGithubToken } from "@/lib/github-token";
 import { RateLimiter, systemClock } from "@/lib/rate-limiter";
 
 // Bump when the cached `data` shape changes so stale rows are recognizable.
-export const GITHUB_SCHEMA_VERSION: number = 1;
+export const GITHUB_SCHEMA_VERSION: number = 3;
+
+const MS_PER_DAY: number = 1000 * 60 * 60 * 24;
 
 // Fields we control, distilled from `GET /repos/{owner}/{repo}`.
 export type GithubRepoInfo = {
@@ -42,6 +44,11 @@ export type GithubRepoData = {
   repo: GithubRepoInfo;
   packageJson: Record<string, unknown> | null;
   packageJsonMissing: boolean;
+  // Enrichments requiring extra requests; null when the upstream call failed.
+  contributorsCount: number | null;
+  commitsLast6Months: number | null;
+  openIssues: number | null; // GitHub Search: type:issue state:open total_count
+  closedIssues: number | null; // GitHub Search: type:issue state:closed total_count
 };
 
 // Distinguishes expected upstream conditions (bad url, missing repo) from
@@ -216,8 +223,100 @@ async function fetchRootPackageJson(
   }
 }
 
+// GitHub paginates counts we care about (contributors, commits) one item per
+// page; the total is the `page` number of the `rel="last"` Link. Returns null
+// when there is no Link header (caller falls back to the item count).
+function parseLastPage(linkHeader: string | undefined): number | null {
+  if (linkHeader === undefined) {
+    return null;
+  }
+  const match: RegExpMatchArray | null = linkHeader.match(
+    /[?&]page=(\d+)[^>]*>;\s*rel="last"/,
+  );
+  return match !== null ? Number(match[1]) : null;
+}
+
+// Contributor count via `per_page=1` + the `rel="last"` page number. Non-fatal:
+// returns null on any failure (e.g. 403 for repos too large to compute).
+async function fetchContributorsCount(
+  input: OwnerRepo,
+): Promise<number | null> {
+  await githubCoreLimiter.acquire();
+  try {
+    const res = await githubApi().get<unknown[]>(
+      `/repos/${input.owner}/${input.repo}/contributors`,
+      { params: { per_page: 1, anon: "true" } },
+    );
+    const lastPage: number | null = parseLastPage(
+      res.headers.link as string | undefined,
+    );
+    if (lastPage !== null) {
+      return lastPage;
+    }
+    return Array.isArray(res.data) ? res.data.length : 0;
+  } catch {
+    return null;
+  }
+}
+
+// Commit count over the last 6 months (180 days) via `since=` + the
+// `rel="last"` page number. An empty repo returns 409; treat that as 0. Other
+// failures -> null.
+async function fetchCommitsLast6Months(
+  input: OwnerRepo,
+): Promise<number | null> {
+  const since: string = new Date(Date.now() - 180 * MS_PER_DAY).toISOString();
+  await githubCoreLimiter.acquire();
+  try {
+    const res = await githubApi().get<unknown[]>(
+      `/repos/${input.owner}/${input.repo}/commits`,
+      { params: { since, per_page: 1 } },
+    );
+    const lastPage: number | null = parseLastPage(
+      res.headers.link as string | undefined,
+    );
+    if (lastPage !== null) {
+      return lastPage;
+    }
+    return Array.isArray(res.data) ? res.data.length : 0;
+  } catch (error) {
+    if (error instanceof AxiosError && error.response?.status === 409) {
+      return 0;
+    }
+    return null;
+  }
+}
+
+type SearchIssuesApiResponse = {
+  total_count: number;
+};
+
+// Issue count for a given state via the Search API (`type:issue` excludes PRs).
+// Metered by the separate `github-search` limiter. Non-fatal: null on failure.
+async function fetchIssueCount(
+  input: OwnerRepo,
+  state: string,
+): Promise<number | null> {
+  await githubSearchLimiter.acquire();
+  try {
+    const res = await githubApi().get<SearchIssuesApiResponse>(
+      `/search/issues`,
+      {
+        params: {
+          q: `repo:${input.owner}/${input.repo} type:issue state:${state}`,
+          per_page: 1,
+        },
+      },
+    );
+    return res.data.total_count;
+  } catch {
+    return null;
+  }
+}
+
 // Read-through fetch: assemble the full cached blob for a normalized repo URL.
-// On any upstream failure this throws (the caller must NOT persist a row).
+// On any upstream failure of the core metadata this throws (the caller must NOT
+// persist a row). The enrichment calls below are non-fatal (null on failure).
 export async function fetchGithubRepoData(
   normalizedUrl: string,
 ): Promise<GithubRepoData> {
@@ -225,10 +324,25 @@ export async function fetchGithubRepoData(
   const repo: GithubRepoInfo = await fetchRepoMetadata(ownerRepo);
   const packageJson: Record<string, unknown> | null =
     await fetchRootPackageJson(ownerRepo);
+  const [contributorsCount, commitsLast6Months, openIssues, closedIssues]: [
+    number | null,
+    number | null,
+    number | null,
+    number | null,
+  ] = await Promise.all([
+    fetchContributorsCount(ownerRepo),
+    fetchCommitsLast6Months(ownerRepo),
+    fetchIssueCount(ownerRepo, "open"),
+    fetchIssueCount(ownerRepo, "closed"),
+  ]);
   return {
     schemaVersion: GITHUB_SCHEMA_VERSION,
     repo,
     packageJson,
     packageJsonMissing: packageJson === null,
+    contributorsCount,
+    commitsLast6Months,
+    openIssues,
+    closedIssues,
   };
 }

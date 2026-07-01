@@ -9,17 +9,31 @@
 import axios, { type AxiosInstance } from "axios";
 import { API_TOKEN } from "@/lib/api-token";
 
-const baseURL: string | undefined = process.env.APP_BASE_URL;
+// Lazily constructed so that a missing `APP_BASE_URL` is only fatal when a
+// server request is actually made — not at module load. This matters during
+// `next build` (page-data collection), which imports server modules in an
+// environment where runtime-only env vars like `APP_BASE_URL` are absent.
+let cachedClient: AxiosInstance | undefined;
 
-if (!baseURL) {
-  throw new Error(
-    "APP_BASE_URL is not set. The server-side API client needs an absolute base URL (see .env.example).",
-  );
+export function getServerApiClient(): AxiosInstance {
+  if (cachedClient) {
+    return cachedClient;
+  }
+
+  const baseURL: string | undefined = process.env.APP_BASE_URL;
+
+  if (!baseURL) {
+    throw new Error(
+      "APP_BASE_URL is not set. The server-side API client needs an absolute base URL (see .env.example).",
+    );
+  }
+
+  cachedClient = axios.create({
+    baseURL,
+    headers: {
+      Authorization: `Bearer ${API_TOKEN}`,
+    },
+  });
+
+  return cachedClient;
 }
-
-export const serverApiClient: AxiosInstance = axios.create({
-  baseURL,
-  headers: {
-    Authorization: `Bearer ${API_TOKEN}`,
-  },
-});

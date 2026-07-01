@@ -16,19 +16,21 @@ import {
 
 const ANTHROPIC_SDK_PACKAGE_NAME: string = "@anthropic-ai/sdk";
 
+type PendingSource = "anthropic" | "input";
+
 export function NpmSearch() {
   const [name, setName] = useState<string>("");
-  const [loading, setLoading] = useState<boolean>(false);
+  const [pending, setPending] = useState<PendingSource | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<NpmPackageData | null>(null);
 
-  async function analyze(target: string): Promise<void> {
+  async function analyze(target: string, source: PendingSource): Promise<void> {
     const trimmed: string = target.trim();
     if (trimmed.length === 0) {
       return;
     }
     setName(trimmed);
-    setLoading(true);
+    setPending(source);
     setError(null);
     setResult(null);
     try {
@@ -37,7 +39,7 @@ export function NpmSearch() {
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to fetch package");
     } finally {
-      setLoading(false);
+      setPending(null);
     }
   }
 
@@ -46,8 +48,9 @@ export function NpmSearch() {
       <Group>
         <Button
           variant="light"
-          onClick={() => analyze(ANTHROPIC_SDK_PACKAGE_NAME)}
-          loading={loading}
+          onClick={() => analyze(ANTHROPIC_SDK_PACKAGE_NAME, "anthropic")}
+          loading={pending === "anthropic"}
+          disabled={pending !== null && pending !== "anthropic"}
         >
           Analyze Anthropic SDK package
         </Button>
@@ -61,12 +64,16 @@ export function NpmSearch() {
           onChange={(e) => setName(e.currentTarget.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter") {
-              void analyze(name);
+              void analyze(name, "input");
             }
           }}
           style={{ flex: 1 }}
         />
-        <Button onClick={() => analyze(name)} loading={loading}>
+        <Button
+          onClick={() => analyze(name, "input")}
+          loading={pending === "input"}
+          disabled={pending !== null && pending !== "input"}
+        >
           Analyze
         </Button>
       </Group>

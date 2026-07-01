@@ -31,6 +31,45 @@ Signals we compute for an npm package to judge how "sketchy" it is, and exactly 
 | GitHub contributor count | Medium | GitHub | `GET /repos/{o}/{r}/contributors?per_page=1&anon=true` | `Link` header `rel="last"` page number = contributor count. This is contributors, a proxy for "maintainers". True maintainers = `GET /repos/{o}/{r}/collaborators`, but that requires push access (auth), so not usable for arbitrary repos. |
 | Incoming dependents | Medium (needs deps.dev) | deps.dev | `GET /systems/npm/packages/{pkg}/versions/{v}:dependents` | `dependentCount`, `directDependentCount`, `indirectDependentCount`. npm itself has **no** official dependents API and the npmjs.com "dependents" page is not scrape-friendly, so deps.dev is the practical source. Requires a specific version in the path. |
 
+## Implemented signals and thresholds
+
+These are the signals wired into [lib/analysis/signals.ts](../lib/analysis/signals.ts) (`REPO_SIGNALS` / `PACKAGE_SIGNALS`). Thresholds are hardcoded (web-config deferred, see [deferred.md](deferred.md)). A signal `throw`s when its input is missing/unavailable; the orchestrator records just that one result as `failed`.
+
+### Repo signals (compute over the cached `GithubRepoData` blob)
+
+| Signal id | Name | green | yellow | red |
+| --- | --- | --- | --- | --- |
+| `repo_last_push` | Last push recency | <= 1 month | 1-6 months | > 6 months |
+| `repo_age` | Repo age | >= 12 months | 3-12 months | < 3 months |
+| `repo_stars` | GitHub stars | >= 500 | 50-499 | < 50 |
+| `repo_archived` | Archived / disabled | active | archived | disabled |
+| `repo_license` | License present | any license present | (none) | no license |
+| `repo_contributors` | Contributor count | >= 10 | 2-9 | 0-1 |
+| `repo_commits_last_6_months` | Recent commit volume | >= 5 in 6 months | 1-4 | 0 |
+| `repo_issue_responsiveness` | Issue responsiveness | closed:open >= 2 (or 0 open) | 0.5-2 | < 0.5 |
+
+### Package signals (compute over the cached `NpmPackageData` blob)
+
+| Signal id | Name | green | yellow | red |
+| --- | --- | --- | --- | --- |
+| `package_age` | npm package age | >= 12 months | 3-12 months | < 3 months |
+| `package_latest_publish` | Latest publish recency | <= 6 months | 6-18 months | > 18 months |
+| `package_maintainers` | Maintainer count | >= 2 | 1 | 0 |
+| `package_install_hooks` | Install hooks | none | (none) | any `preinstall`/`install`/`postinstall` |
+| `package_downloads` | Monthly downloads | >= 100,000 | 1,000-99,999 | < 1,000 |
+| `package_transparent_build` | Transparent build | provenance present | registry-signed only | unsigned |
+| `package_deprecated` | Deprecation | not deprecated | older version deprecated | latest deprecated |
+| `package_dependents` | Incoming dependents | >= 100 | 10-99 | < 10 |
+
+### Where the data comes from
+
+- Easy repo/package signals read fields already cached by the GitHub and npm sources (no extra requests).
+- `repo_contributors`, `repo_commits_last_6_months`, `repo_issue_responsiveness` add extra GitHub requests folded into the GitHub source blob (`GithubRepoData.contributorsCount`, `.commitsLast6Months`, `.openIssues`, `.closedIssues`); the two issue-count calls use the separate `github-search` limiter. `GITHUB_SCHEMA_VERSION` bumped to 3.
+- `package_transparent_build` reads `latest.dist.attestations` (provenance) / `latest.dist.signatures` (registry signature) already in the packument.
+- `package_deprecated` reads `latest.deprecated` + `packument.anyVersionDeprecated`, added to the npm blob. `NPM_SCHEMA_VERSION` bumped to 3 (also covers dependents).
+- `package_dependents` calls deps.dev, **folded into the npm source** (`NpmPackageData.dependents`, `deps-dev` limiter) rather than a separate cached source, to avoid a new Prisma table / `db:push` on the shared prod DB.
+- Both source caches were cleared after the schema bumps (no `schemaVersion` validation on read, so stale rows would otherwise persist).
+
 ## Complexity at a glance
 
 - **Easy (single request, no auth):** npm package age, latest publish age, npm maintainers, install hooks, downloads, repo age, stars, last push. All come from one npm packument call plus one GitHub repo call plus the downloads endpoint.

@@ -39,7 +39,7 @@ Conventions for working in the isitsketchy project. Follow these unless a task e
 - Requests to our API MUST be made through one of the token-attaching helpers below. Do not call `axios` directly from an API `client.ts`.
 - There are two clients, split by runtime so it is obvious which to use:
   - Browser code (`"use client"` components): use `browserApiClient` from `lib/api-client.browser.ts` (relative URLs).
-  - Server code (Route Handlers, Server Components, scripts): use `serverApiClient` from `lib/api-client.server.ts` (absolute `baseURL` from `APP_BASE_URL`, since Node cannot resolve relative `/api` URLs).
+  - Server code (Route Handlers, Server Components, scripts): use `getServerApiClient()` from `lib/api-client.server.ts` (absolute `baseURL` from `APP_BASE_URL`, since Node cannot resolve relative `/api` URLs). The client is constructed lazily on first call (and cached), so a missing `APP_BASE_URL` only fails when a request is actually made — not at module load. This keeps `next build` page-data collection from failing when the runtime-only `APP_BASE_URL` is absent.
   - Do not cross them: the browser client's relative URLs break in Node, and the server client needs `APP_BASE_URL`.
 - Both clients attach the token automatically and read it from the single reader in `lib/api-token.ts` (`NEXT_PUBLIC_API_TOKEN`), at module load time; the app fails fast if it is missing.
 

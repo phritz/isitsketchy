@@ -148,10 +148,11 @@ export const REPO_SIGNALS: SignalDef<RepoSignalContext>[] = [ /* repo signals fr
 export const PACKAGE_SIGNALS: SignalDef<PackageSignalContext>[] = [ /* package signals from signals.md */ ];
 ```
 
-MVP candidates (each becomes one `AnalysisResult`), computed purely from cached blobs:
+Implemented signals (each becomes one `AnalysisResult`). Full thresholds live in [signals.md](signals.md#implemented-signals-and-thresholds):
 
-- `REPO_SIGNALS`: repo age, last-push recency, stars, archived/disabled flag, license present.
-- `PACKAGE_SIGNALS`: npm package age, latest publish age, maintainers count, install hooks present, weekly/monthly downloads, deprecation flag, provenance/signature present, resolvable-repo / repo <-> npm consistency.
+- `REPO_SIGNALS`: `repo_last_push`, `repo_age`, `repo_stars`, `repo_archived`, `repo_license`, `repo_contributors`, `repo_commits_last_6_months`, `repo_issue_responsiveness`.
+- `PACKAGE_SIGNALS`: `package_age`, `package_latest_publish`, `package_maintainers`, `package_install_hooks`, `package_downloads`, `package_transparent_build`, `package_deprecated`, `package_dependents`.
+- Easy signals compute purely from the already-cached GitHub/npm blobs. Medium signals add extra fetches folded into the sources: GitHub contributors/recent-commits/issue-counts on `GithubRepoData`, and deps.dev dependents on `NpmPackageData` (rather than a separate cached source).
 
 ### First signal to implement: `repo_last_push`
 

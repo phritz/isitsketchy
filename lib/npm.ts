@@ -10,7 +10,7 @@ import validatePackageNameLib from "validate-npm-package-name";
 import { RateLimiter, systemClock } from "@/lib/rate-limiter";
 
 // Bump when the cached `data` shape changes so stale rows are recognizable.
-export const NPM_SCHEMA_VERSION: number = 1;
+export const NPM_SCHEMA_VERSION: number = 3;
 
 export type NpmMaintainer = {
   name: string;
@@ -35,6 +35,7 @@ export type NpmLatestManifest = {
   scripts: Record<string, string>;
   engines: Record<string, string> | null;
   dist: NpmDist;
+  deprecated: string | null; // deprecation message for the latest version, if any
 };
 
 // Distilled packument fields we control.
@@ -47,6 +48,7 @@ export type NpmPackument = {
   homepage: string | null;
   repository: NpmRepository | null;
   time: NpmTime;
+  anyVersionDeprecated: boolean; // true if any published version carries a deprecation flag
 };
 
 export type NpmRepository = {
@@ -66,12 +68,20 @@ export type NpmDownloads = {
   lastMonth: number | null;
 };
 
+// Dependent counts from deps.dev (npm has no official dependents API). Folded
+// into this source rather than a separate cache since it enriches the package.
+export type NpmDependents = {
+  directDependentCount: number | null;
+  totalDependentCount: number | null;
+};
+
 // The versioned jsonb blob stored in `NpmPackage.data`.
 export type NpmPackageData = {
   schemaVersion: number;
   packument: NpmPackument;
   latest: NpmLatestManifest | null;
   downloads: NpmDownloads | null;
+  dependents: NpmDependents | null;
 };
 
 // Distinguishes expected upstream conditions (bad name, missing package) from
@@ -96,10 +106,18 @@ const npmRegistryLimiter: RateLimiter = new RateLimiter({
   clock: systemClock,
 });
 
+// deps.dev publishes no hard rate cap; this is a conservative politeness tunable.
+const depsDevLimiter: RateLimiter = new RateLimiter({
+  name: "deps-dev",
+  limitPerMinute: 60,
+  clock: systemClock,
+});
+
 // Built lazily and memoized so all requests share one instance. No auth: the
 // npm registry and downloads APIs are public.
 let registryApiInstance: AxiosInstance | null = null;
 let downloadsApiInstance: AxiosInstance | null = null;
+let depsDevApiInstance: AxiosInstance | null = null;
 
 function registryApi(): AxiosInstance {
   if (registryApiInstance === null) {
@@ -117,6 +135,15 @@ function downloadsApi(): AxiosInstance {
     });
   }
   return downloadsApiInstance;
+}
+
+function depsDevApi(): AxiosInstance {
+  if (depsDevApiInstance === null) {
+    depsDevApiInstance = axios.create({
+      baseURL: "https://api.deps.dev/v3alpha",
+    });
+  }
+  return depsDevApiInstance;
 }
 
 // Throw on an invalid npm name before any network call. `validForOldPackages`
@@ -154,6 +181,7 @@ type PackumentVersion = {
   devDependencies?: Record<string, string>;
   scripts?: Record<string, string>;
   engines?: Record<string, string>;
+  deprecated?: string | boolean;
   dist?: {
     tarball?: string;
     integrity?: string;
@@ -218,6 +246,20 @@ function normalizeTime(time: Record<string, string> | undefined): NpmTime {
   };
 }
 
+// npm's `deprecated` is a message string, but legacy packages sometimes set it
+// to a bare `true`. Normalize both to a message string (or null when absent).
+function normalizeDeprecated(
+  deprecated: string | boolean | undefined,
+): string | null {
+  if (deprecated === undefined || deprecated === false) {
+    return null;
+  }
+  if (deprecated === true) {
+    return "deprecated";
+  }
+  return deprecated.length > 0 ? deprecated : null;
+}
+
 function distillLatest(
   version: PackumentVersion | undefined,
 ): NpmLatestManifest | null {
@@ -231,6 +273,7 @@ function distillLatest(
     devDependencies: version.devDependencies ?? {},
     scripts: version.scripts ?? {},
     engines: version.engines ?? null,
+    deprecated: normalizeDeprecated(version.deprecated),
     dist: {
       tarball: dist.tarball ?? null,
       integrity: dist.integrity ?? null,
@@ -258,6 +301,12 @@ async function fetchPackument(name: string): Promise<DistilledPackument> {
     const distTagLatest: string | null = raw["dist-tags"]?.latest ?? null;
     const latestManifest: PackumentVersion | undefined =
       distTagLatest !== null ? raw.versions?.[distTagLatest] : undefined;
+    const anyVersionDeprecated: boolean = Object.values(
+      raw.versions ?? {},
+    ).some(
+      (version: PackumentVersion): boolean =>
+        normalizeDeprecated(version.deprecated) !== null,
+    );
     return {
       packument: {
         name: raw.name,
@@ -268,6 +317,7 @@ async function fetchPackument(name: string): Promise<DistilledPackument> {
         homepage: raw.homepage ?? null,
         repository: normalizeRepository(raw.repository),
         time: normalizeTime(raw.time),
+        anyVersionDeprecated,
       },
       latest: distillLatest(latestManifest),
     };
@@ -314,19 +364,50 @@ async function fetchDownloads(name: string): Promise<NpmDownloads | null> {
   }
 }
 
+type DependentsApiResponse = {
+  dependentCount?: number;
+  directDependentCount?: number;
+  indirectDependentCount?: number;
+};
+
+// Dependent counts from deps.dev for a specific version. Non-fatal enrichment:
+// returns null on any failure so the caller still caches the packument blob.
+async function fetchDependents(
+  name: string,
+  version: string,
+): Promise<NpmDependents | null> {
+  await depsDevLimiter.acquire();
+  try {
+    const encodedName: string = encodeURIComponent(name);
+    const res = await depsDevApi().get<DependentsApiResponse>(
+      `/systems/npm/packages/${encodedName}/versions/${version}:dependents`,
+    );
+    return {
+      directDependentCount: res.data.directDependentCount ?? null,
+      totalDependentCount: res.data.dependentCount ?? null,
+    };
+  } catch {
+    return null;
+  }
+}
+
 // Read-through fetch: assemble the full cached blob for a package name. On a
 // packument failure this throws (the caller must NOT persist a row); download
-// failures are swallowed (downloads: null).
+// and dependents failures are swallowed (null).
 export async function fetchNpmPackageData(
   name: string,
 ): Promise<NpmPackageData> {
   validatePackageName(name);
   const distilled: DistilledPackument = await fetchPackument(name);
   const downloads: NpmDownloads | null = await fetchDownloads(name);
+  const latestVersion: string | null = distilled.packument.distTagLatest;
+  const dependents: NpmDependents | null =
+    latestVersion !== null ? await fetchDependents(name, latestVersion) : null;
   return {
     schemaVersion: NPM_SCHEMA_VERSION,
     packument: distilled.packument,
     latest: distilled.latest,
     downloads,
+    dependents,
   };
 }
