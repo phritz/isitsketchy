@@ -58,7 +58,7 @@ These are the signals wired into [lib/analysis/signals.ts](../lib/analysis/signa
 | `package_install_hooks` | Install hooks | none | (none) | any `preinstall`/`install`/`postinstall` |
 | `package_downloads` | Monthly downloads | >= 100,000 | 1,000-99,999 | < 1,000 |
 | `package_transparent_build` | Transparent build | provenance present | registry-signed only | unsigned |
-| `package_deprecated` | Deprecation | not deprecated | older version deprecated | latest deprecated |
+| `package_deprecated` | Deprecation | latest not deprecated | (none) | latest deprecated |
 | `package_dependents` | Incoming dependents | >= 100 | 10-99 | < 10 |
 
 ### Where the data comes from
@@ -66,7 +66,7 @@ These are the signals wired into [lib/analysis/signals.ts](../lib/analysis/signa
 - Easy repo/package signals read fields already cached by the GitHub and npm sources (no extra requests).
 - `repo_contributors`, `repo_commits_last_6_months`, `repo_issue_responsiveness` add extra GitHub requests folded into the GitHub source blob (`GithubRepoData.contributorsCount`, `.commitsLast6Months`, `.openIssues`, `.closedIssues`); the two issue-count calls use the separate `github-search` limiter. `GITHUB_SCHEMA_VERSION` bumped to 3.
 - `package_transparent_build` reads `latest.dist.attestations` (provenance) / `latest.dist.signatures` (registry signature) already in the packument.
-- `package_deprecated` reads `latest.deprecated` + `packument.anyVersionDeprecated`, added to the npm blob. `NPM_SCHEMA_VERSION` bumped to 3 (also covers dependents).
+- `package_deprecated` reads `latest.deprecated` only (red when the latest/current version is deprecated, otherwise green — deprecation of older versions is ignored). `NPM_SCHEMA_VERSION` bumped to 3 (also covers dependents).
 - `package_dependents` calls deps.dev, **folded into the npm source** (`NpmPackageData.dependents`, `deps-dev` limiter) rather than a separate cached source, to avoid a new Prisma table / `db:push` on the shared prod DB.
 - Both source caches were cleared after the schema bumps (no `schemaVersion` validation on read, so stale rows would otherwise persist).
 

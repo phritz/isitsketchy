@@ -12,6 +12,7 @@ import {
   Group,
   Loader,
   Paper,
+  Progress,
   Stack,
   Table,
   Text,
@@ -85,6 +86,38 @@ function bucketFlags(run: AnalysisRunData): Buckets {
   };
 }
 
+// Live progress while a run is still discovering subjects / computing signals.
+// Drives the prominent status panel shown before results are ready.
+type Progress = {
+  repoCount: number;
+  packageCount: number;
+  totalSignals: number;
+  analyzedSignals: number;
+};
+
+function computeProgress(run: AnalysisRunData): Progress {
+  let repoCount: number = 0;
+  let packageCount: number = 0;
+  let totalSignals: number = 0;
+  let analyzedSignals: number = 0;
+
+  for (const subject of run.subjects) {
+    if (subject.type === "repo") {
+      repoCount += 1;
+    } else {
+      packageCount += 1;
+    }
+    for (const result of subject.results) {
+      totalSignals += 1;
+      if (result.status === "completed" || result.status === "failed") {
+        analyzedSignals += 1;
+      }
+    }
+  }
+
+  return { repoCount, packageCount, totalSignals, analyzedSignals };
+}
+
 // Both subject kinds resolve to a canonical public URL derived from `name`
 // (repo names are `owner/repo`; package names are the npm package id).
 function subjectWebUrl(subject: AnalysisSubjectData): string {
@@ -141,6 +174,66 @@ function StatusText({ status }: { status: ResultStatus }) {
     <Text size="sm" c="dimmed">
       {label}
     </Text>
+  );
+}
+
+// A single labeled count for the progress panel.
+function Stat({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <Stack gap={2} align="center" miw={90}>
+      <Text fw={700} fz={28} lh={1}>
+        {value}
+      </Text>
+      <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
+        {label}
+      </Text>
+    </Stack>
+  );
+}
+
+// Prominent status shown while the run is pending/running. Deliberately the
+// only thing on screen until the run reaches a terminal state — no partial
+// results, just what has been discovered and how far along the signals are.
+function ProgressPanel({
+  run,
+  progress,
+}: {
+  run: AnalysisRunData;
+  progress: Progress;
+}) {
+  const running: boolean = run.status === "running";
+  const pct: number =
+    progress.totalSignals === 0
+      ? 0
+      : Math.round((progress.analyzedSignals / progress.totalSignals) * 100);
+  return (
+    <Paper withBorder p="xl" radius="md" shadow="xs">
+      <Stack gap="lg" align="center">
+        <Loader size="lg" />
+        <Title order={2}>Analyzing…</Title>
+        <Text c="dimmed" ta="center">
+          {running
+            ? "Evaluating trustworthiness signals…"
+            : "Gathering metadata…"}
+        </Text>
+
+        {running ? (
+          <Stack gap={6} w="100%" maw={380}>
+            <Progress value={pct} size="lg" radius="xl" animated />
+            <Text size="sm" c="dimmed" ta="center">
+              {progress.analyzedSignals} of {progress.totalSignals} signals
+              analyzed
+            </Text>
+          </Stack>
+        ) : null}
+
+        <Group gap="xl" justify="center">
+          <Stat label="Repositories" value={progress.repoCount} />
+          <Stat label="Packages" value={progress.packageCount} />
+          <Stat label="Signals" value={progress.totalSignals} />
+        </Group>
+      </Stack>
+    </Paper>
   );
 }
 
@@ -250,7 +343,7 @@ function fullResultRows(run: AnalysisRunData): React.ReactNode[] {
           </Table.Td>
           <Table.Td>{subject.type}</Table.Td>
           <Table.Td>{result.name}</Table.Td>
-          <Table.Td>
+          <Table.Td style={{ whiteSpace: "nowrap" }}>
             {result.riskScore ? (
               <Badge size="sm" color={riskColor(result.riskScore)}>
                 {result.riskScore}
@@ -271,7 +364,7 @@ function fullResultRows(run: AnalysisRunData): React.ReactNode[] {
 }
 
 function FullResults({ run }: { run: AnalysisRunData }) {
-  const [opened, { toggle }] = useDisclosure(false);
+  const [opened, { toggle }] = useDisclosure(true);
   return (
     <Stack gap="xs">
       <Button
@@ -283,19 +376,21 @@ function FullResults({ run }: { run: AnalysisRunData }) {
         {opened ? "Hide full results" : "Show full results"}
       </Button>
       <Collapse expanded={opened}>
-        <Table striped withTableBorder fz="sm" verticalSpacing="xs">
-          <Table.Thead>
-            <Table.Tr>
-              <Table.Th>Subject</Table.Th>
-              <Table.Th>Type</Table.Th>
-              <Table.Th>Signal</Table.Th>
-              <Table.Th>Risk</Table.Th>
-              <Table.Th>Status</Table.Th>
-              <Table.Th>Detail</Table.Th>
-            </Table.Tr>
-          </Table.Thead>
-          <Table.Tbody>{fullResultRows(run)}</Table.Tbody>
-        </Table>
+        <Table.ScrollContainer minWidth={640}>
+          <Table striped withTableBorder fz="sm" verticalSpacing="sm">
+            <Table.Thead>
+              <Table.Tr>
+                <Table.Th>Subject</Table.Th>
+                <Table.Th>Type</Table.Th>
+                <Table.Th>Signal</Table.Th>
+                <Table.Th w={90}>Risk</Table.Th>
+                <Table.Th>Status</Table.Th>
+                <Table.Th>Detail</Table.Th>
+              </Table.Tr>
+            </Table.Thead>
+            <Table.Tbody>{fullResultRows(run)}</Table.Tbody>
+          </Table>
+        </Table.ScrollContainer>
       </Collapse>
     </Stack>
   );
@@ -306,10 +401,15 @@ export default function AnalysisDetailPage() {
   const id: string = params.id;
   const [run, setRun] = useState<AnalysisRunData | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // A transient refresh failure after we already have data (e.g. a timed-out
+  // poll). We keep polling and surface this softly rather than tearing down the
+  // live view for a blip.
+  const [stale, setStale] = useState<boolean>(false);
 
   useEffect(() => {
     let active: boolean = true;
     let timer: ReturnType<typeof setTimeout> | null = null;
+    let loaded: boolean = false;
 
     async function poll(): Promise<void> {
       try {
@@ -317,14 +417,29 @@ export default function AnalysisDetailPage() {
         if (!active) {
           return;
         }
+        loaded = true;
         setRun(data);
+        setError(null);
+        setStale(false);
         if (!isTerminal(data.status)) {
           timer = setTimeout(poll, POLL_INTERVAL_MS);
         }
       } catch (e) {
-        if (active) {
-          setError(e instanceof Error ? e.message : "Failed to load analysis");
+        if (!active) {
+          return;
         }
+        const message: string =
+          e instanceof Error ? e.message : "Failed to load analysis";
+        if (!loaded) {
+          // Initial load failed: there is nothing to show, so surface a hard
+          // error and stop.
+          setError(message);
+          return;
+        }
+        // We already have data and the run was still in progress: keep polling
+        // so a transient failure doesn't permanently freeze the live view.
+        setStale(true);
+        timer = setTimeout(poll, POLL_INTERVAL_MS);
       }
     }
 
@@ -338,22 +453,24 @@ export default function AnalysisDetailPage() {
   }, [id]);
 
   const buckets: Buckets | null = run === null ? null : bucketFlags(run);
+  const progress: Progress | null = run === null ? null : computeProgress(run);
+  const terminal: boolean = run !== null && isTerminal(run.status);
   const hasFlags: boolean =
     buckets !== null && (buckets.red.length > 0 || buckets.yellow.length > 0);
 
   return (
     <Container size="md" py="xl">
       <Stack gap="lg">
-        <Anchor href="/ui">← Home</Anchor>
-
         <Group justify="space-between" align="center">
-          <Title order={1}>Analysis</Title>
-          <Anchor href="/ui/analysis">All analyses</Anchor>
+          <Anchor href="/ui">← Home</Anchor>
+          <Anchor href="/ui/signals">What do these signals mean?</Anchor>
         </Group>
+
+        <Title order={1}>Analysis</Title>
 
         {error ? <Text c="red">{error}</Text> : null}
 
-        {run === null || buckets === null ? (
+        {run === null || buckets === null || progress === null ? (
           <Text c="dimmed">Loading…</Text>
         ) : (
           <Stack gap="xl">
@@ -366,15 +483,22 @@ export default function AnalysisDetailPage() {
               >
                 {run.repoUrl}
               </Anchor>
-              <StatusText status={run.status} />
+              {terminal ? <StatusText status={run.status} /> : null}
+              {stale ? (
+                <Text size="sm" c="dimmed">
+                  Reconnecting…
+                </Text>
+              ) : null}
             </Group>
 
             {run.error ? (
               <Text c="red">
                 {run.error.code}: {run.error.message}
               </Text>
+            ) : !terminal ? (
+              <ProgressPanel run={run} progress={progress} />
             ) : run.subjects.length === 0 ? (
-              <Text c="dimmed">Discovering subjects…</Text>
+              <Text c="dimmed">No subjects were analyzed.</Text>
             ) : (
               <>
                 {hasFlags ? null : (

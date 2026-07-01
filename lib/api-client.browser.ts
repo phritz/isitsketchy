@@ -9,7 +9,14 @@
 import axios, { type AxiosInstance } from "axios";
 import { API_TOKEN } from "@/lib/api-token";
 
+// Our own endpoints are quick DB-backed operations (poll a run, list runs,
+// create-and-return-id with detached orchestration), so a 10s timeout is a safe
+// upper bound that fails fast instead of hanging the UI. The analysis page's
+// poll loop tolerates a timed-out request and keeps polling.
+const REQUEST_TIMEOUT_MS: number = 10000;
+
 export const browserApiClient: AxiosInstance = axios.create({
+  timeout: REQUEST_TIMEOUT_MS,
   headers: {
     Authorization: `Bearer ${API_TOKEN}`,
   },

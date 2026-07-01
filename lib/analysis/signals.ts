@@ -335,15 +335,9 @@ export const PACKAGE_SIGNALS: SignalDef<PackageSignalContext>[] = [
           comment: `Latest version is deprecated: ${latestDeprecated}`,
         };
       }
-      if (npmPackage.packument.anyVersionDeprecated) {
-        return {
-          riskScore: "yellow",
-          comment: "An older version is deprecated, but the latest is not",
-        };
-      }
       return {
         riskScore: "green",
-        comment: "Not deprecated",
+        comment: "Latest version is not deprecated",
       };
     },
   },

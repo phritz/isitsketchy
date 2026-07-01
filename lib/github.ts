@@ -14,6 +14,11 @@ export const GITHUB_SCHEMA_VERSION: number = 3;
 
 const MS_PER_DAY: number = 1000 * 60 * 60 * 24;
 
+// Per-request timeout on outbound GitHub calls. Without it, a hung upstream
+// connection would stall the (sequential) analysis run indefinitely. Failures
+// here surface as a fatal run error (source repo) or null enrichment.
+const UPSTREAM_TIMEOUT_MS: number = 10000;
+
 // Fields we control, distilled from `GET /repos/{owner}/{repo}`.
 export type GithubRepoInfo = {
   full_name: string;
@@ -86,6 +91,7 @@ function githubApi(): AxiosInstance {
   if (githubApiInstance === null) {
     githubApiInstance = axios.create({
       baseURL: "https://api.github.com",
+      timeout: UPSTREAM_TIMEOUT_MS,
       headers: {
         Authorization: `Bearer ${getGithubToken()}`,
         Accept: "application/vnd.github+json",

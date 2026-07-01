@@ -58,7 +58,7 @@ export function HomeSearch() {
 
       <Group align="flex-end">
         <TextInput
-          label="GitHub repo URL"
+          label="Analyze a GitHub repo by URL"
           placeholder="https://github.com/owner/repo"
           value={url}
           onChange={(e) => setUrl(e.currentTarget.value)}

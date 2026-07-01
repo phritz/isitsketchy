@@ -12,6 +12,11 @@ import { RateLimiter, systemClock } from "@/lib/rate-limiter";
 // Bump when the cached `data` shape changes so stale rows are recognizable.
 export const NPM_SCHEMA_VERSION: number = 3;
 
+// Per-request timeout on outbound registry/downloads/deps.dev calls. Without it,
+// a hung upstream connection would stall the (sequential) analysis run
+// indefinitely. Failures surface as a per-subject error or null enrichment.
+const UPSTREAM_TIMEOUT_MS: number = 10000;
+
 export type NpmMaintainer = {
   name: string;
   email: string | null;
@@ -48,7 +53,6 @@ export type NpmPackument = {
   homepage: string | null;
   repository: NpmRepository | null;
   time: NpmTime;
-  anyVersionDeprecated: boolean; // true if any published version carries a deprecation flag
 };
 
 export type NpmRepository = {
@@ -123,6 +127,7 @@ function registryApi(): AxiosInstance {
   if (registryApiInstance === null) {
     registryApiInstance = axios.create({
       baseURL: "https://registry.npmjs.org",
+      timeout: UPSTREAM_TIMEOUT_MS,
     });
   }
   return registryApiInstance;
@@ -132,6 +137,7 @@ function downloadsApi(): AxiosInstance {
   if (downloadsApiInstance === null) {
     downloadsApiInstance = axios.create({
       baseURL: "https://api.npmjs.org",
+      timeout: UPSTREAM_TIMEOUT_MS,
     });
   }
   return downloadsApiInstance;
@@ -141,6 +147,7 @@ function depsDevApi(): AxiosInstance {
   if (depsDevApiInstance === null) {
     depsDevApiInstance = axios.create({
       baseURL: "https://api.deps.dev/v3alpha",
+      timeout: UPSTREAM_TIMEOUT_MS,
     });
   }
   return depsDevApiInstance;
@@ -301,12 +308,6 @@ async function fetchPackument(name: string): Promise<DistilledPackument> {
     const distTagLatest: string | null = raw["dist-tags"]?.latest ?? null;
     const latestManifest: PackumentVersion | undefined =
       distTagLatest !== null ? raw.versions?.[distTagLatest] : undefined;
-    const anyVersionDeprecated: boolean = Object.values(
-      raw.versions ?? {},
-    ).some(
-      (version: PackumentVersion): boolean =>
-        normalizeDeprecated(version.deprecated) !== null,
-    );
     return {
       packument: {
         name: raw.name,
@@ -317,7 +318,6 @@ async function fetchPackument(name: string): Promise<DistilledPackument> {
         homepage: raw.homepage ?? null,
         repository: normalizeRepository(raw.repository),
         time: normalizeTime(raw.time),
-        anyVersionDeprecated,
       },
       latest: distillLatest(latestManifest),
     };

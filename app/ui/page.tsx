@@ -26,6 +26,7 @@ export default function Home() {
 
       <Group mt="md">
         <Anchor href="/ui/analysis">View past analyses</Anchor>
+        <Anchor href="/ui/signals">How signals work</Anchor>
       </Group>
 
       <Stack gap="xl" mt="xl">
@@ -55,19 +56,17 @@ export default function Home() {
           <Anchor href="/ui/sources/npm" size="xs" c="dimmed">
             npm cache management
           </Anchor>
+          <Anchor
+            href="https://github.com/phritz/isitsketchy"
+            target="_blank"
+            rel="noreferrer"
+            size="xs"
+            c="dimmed"
+          >
+            Is It Sketchy? on GitHub
+          </Anchor>
         </Group>
       </Stack>
-
-      <Text size="xs" c="dimmed" mt="xl">
-        <Anchor
-          href="https://github.com/phritz/isitsketchy"
-          target="_blank"
-          rel="noreferrer"
-          c="dimmed"
-        >
-          Is It Sketchy? on GitHub
-        </Anchor>
-      </Text>
     </Container>
   );
 }
