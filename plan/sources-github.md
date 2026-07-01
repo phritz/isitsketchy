@@ -60,7 +60,11 @@ flowchart TD
 
 ## GitHub API Usage (axios)
 
-- Use `axios` (per AGENTS.md) with `Authorization: Bearer ${GITHUB_TOKEN}` when the env var is present (60 req/hr unauth vs 5000/hr authed).
+- Use `axios` (per AGENTS.md) with `Authorization: Bearer ${GITHUB_TOKEN}`. We assume **authenticated** requests: core 5000 req/hr (~83/min), Search 30 req/min. Unauthenticated (60/hr core, 10/min search) is not viable for this workload — treat a missing token as a misconfiguration.
+- Client-side pacing: wrap every outbound GitHub call in the shared [`RateLimiter`](../lib/rate-limiter.ts) (`acquire()` before each request) so we stay under GitHub's limits and its secondary anti-burst limits. Use **two separate limiters** since GitHub meters core and Search independently:
+  - `github-core` — `limitPerMinute: 60` (= 3600/hr, ~28% headroom under 5000/hr; also smooths bursts to avoid secondary limits). Covers `GET /repos/...`, `/contents`, `/commits`, `/contributors`.
+  - `github-search` — `limitPerMinute: 24` (20% headroom under the 30/min Search cap). Covers `GET /search/issues`.
+  - Instantiate with `systemClock`; keep both as module-level singletons so all requests share one bucket.
 - Calls: `GET https://api.github.com/repos/{owner}/{repo}` for metadata; `GET https://api.github.com/repos/{owner}/{repo}/contents/package.json` (root), base64-decoded and JSON-parsed, for repo -> npm linkage.
 - Errors:
   - 404 repo -> `{ ok: false, error: { message: "repo_not_found" } }`.

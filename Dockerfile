@@ -14,6 +14,11 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
+# NEXT_PUBLIC_* vars are inlined into the bundle at build time, so the value must
+# be present during `next build`. Railway passes service variables to Dockerfile
+# builds only via declared ARGs, so declare it here and promote it to an env var.
+ARG NEXT_PUBLIC_API_TOKEN
+ENV NEXT_PUBLIC_API_TOKEN=$NEXT_PUBLIC_API_TOKEN
 # Regenerate the Rust-free Prisma client into the source tree (lib/generated).
 RUN npx prisma generate
 RUN npm run build
