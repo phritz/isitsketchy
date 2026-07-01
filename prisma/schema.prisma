@@ -7,9 +7,11 @@ datasource db {
   provider = "postgresql"
 }
 
-model Repo {
+model GithubRepo {
   id        String   @id @default(cuid())
-  url       String
+  url       String   @unique
+  data      Json
+  fetchedAt DateTime
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
