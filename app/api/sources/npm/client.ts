@@ -1,8 +1,10 @@
-import { AxiosError } from "axios";
 import { browserApiClient } from "@/lib/api-client.browser";
+import { toError } from "@/lib/errors";
 import type { NpmPackageData } from "@/lib/npm";
 
 export type { NpmPackageData } from "@/lib/npm";
+export type { ErrorResponse } from "@/lib/errors";
+export { toError };
 
 export type NpmPackageMeta = {
   fetchedAt: string;
@@ -28,24 +30,7 @@ export type ListNpmPackagesResponse = {
   data: NpmPackageSummary[];
 };
 
-export type ErrorResponse = {
-  ok: false;
-  error: { message: string };
-};
-
 export const ENDPOINT: string = "/api/sources/npm";
-
-// Surface the server's `{ ok: false, error }` message instead of a generic
-// axios status string.
-export function toError(error: unknown): Error {
-  if (error instanceof AxiosError) {
-    const data = error.response?.data as ErrorResponse | undefined;
-    if (data && data.ok === false) {
-      return new Error(data.error.message);
-    }
-  }
-  return error instanceof Error ? error : new Error("Request failed");
-}
 
 // Browser read-through fetch for a single package (used by the home page box).
 // The analysis pipeline uses the server-side `getNpmPackage` in

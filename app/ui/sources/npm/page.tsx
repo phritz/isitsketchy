@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   Anchor,
   Button,
@@ -17,48 +17,25 @@ import {
   listNpmPackages,
   type NpmPackageSummary,
 } from "@/app/api/sources/npm/client";
+import { useAsyncData } from "@/lib/use-async-data";
 
 export default function NpmCachePage() {
-  const [rows, setRows] = useState<NpmPackageSummary[]>([]);
-  const [error, setError] = useState<string | null>(null);
+  const {
+    data,
+    error,
+    reload,
+    setError,
+  } = useAsyncData<NpmPackageSummary[]>(listNpmPackages, "Failed to load cache");
+  const rows: NpmPackageSummary[] = data ?? [];
   const [busyId, setBusyId] = useState<string | null>(null);
   const [clearing, setClearing] = useState<boolean>(false);
-
-  async function refresh(): Promise<void> {
-    setError(null);
-    try {
-      const data = await listNpmPackages();
-      setRows(data);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load cache");
-    }
-  }
-
-  useEffect(() => {
-    let active: boolean = true;
-    void (async () => {
-      try {
-        const data = await listNpmPackages();
-        if (active) {
-          setRows(data);
-        }
-      } catch (e) {
-        if (active) {
-          setError(e instanceof Error ? e.message : "Failed to load cache");
-        }
-      }
-    })();
-    return () => {
-      active = false;
-    };
-  }, []);
 
   async function onRemove(id: string): Promise<void> {
     setBusyId(id);
     setError(null);
     try {
       await deleteNpmPackage(id);
-      await refresh();
+      await reload();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to remove entry");
     } finally {
@@ -71,7 +48,7 @@ export default function NpmCachePage() {
     setError(null);
     try {
       await clearNpmPackages();
-      await refresh();
+      await reload();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to clear cache");
     } finally {

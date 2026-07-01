@@ -4,8 +4,10 @@ import { Prisma } from "@/lib/generated/prisma/client";
 import { GithubFetchError, normalizeUrl, parseOwnerRepo } from "@/lib/github";
 import { NpmFetchError, validatePackageName } from "@/lib/npm";
 import { runAnalysis } from "@/lib/analysis/orchestrator";
+import { errorMessage } from "@/lib/errors";
+import { errorResponse, NO_STORE_HEADERS } from "@/lib/api-response";
 import {
-  deriveStatus,
+  resolveStatus,
   type AnalysisError,
   type AnalysisResultData,
   type AnalysisRunData,
@@ -23,20 +25,6 @@ import {
 } from "./client";
 
 export const dynamic = "force-dynamic";
-
-const NO_STORE_HEADERS: Record<string, string> = {
-  "Cache-Control": "no-store, no-cache, must-revalidate",
-  Pragma: "no-cache",
-  Expires: "0",
-};
-
-function errorResponse(
-  message: string,
-  status: number,
-): NextResponse<ErrorResponse> {
-  const body: ErrorResponse = { ok: false, error: { message } };
-  return NextResponse.json(body, { status, headers: NO_STORE_HEADERS });
-}
 
 function parseError(value: Prisma.JsonValue): AnalysisError | null {
   if (value === null || typeof value !== "object" || Array.isArray(value)) {
@@ -84,7 +72,7 @@ function serializeResult(row: ResultRow): AnalysisResultData {
 function serializeSubject(row: SubjectRow): AnalysisSubjectData {
   const results: AnalysisResultData[] = row.results.map(serializeResult);
   const error: AnalysisError | null = parseError(row.error);
-  const status: ResultStatus = error !== null ? "failed" : deriveStatus(results);
+  const status: ResultStatus = resolveStatus(error, results);
   return {
     id: row.id,
     type: row.type as SubjectType,
@@ -161,8 +149,7 @@ async function getRun(
   const allResults: { status: ResultStatus }[] = subjects.flatMap(
     (subject) => subject.results,
   );
-  const status: ResultStatus =
-    runError !== null ? "failed" : deriveStatus(allResults);
+  const status: ResultStatus = resolveStatus(runError, allResults);
 
   const data: AnalysisRunData = {
     id: run.id,
@@ -197,8 +184,7 @@ async function listRuns(): Promise<NextResponse<ListAnalysesResponse>> {
           status: result.status as ResultStatus,
         })),
     );
-    const status: ResultStatus =
-      runError !== null ? "failed" : deriveStatus(allResults);
+    const status: ResultStatus = resolveStatus(runError, allResults);
     return {
       id: run.id,
       rootType: run.rootType as RootType,
@@ -226,8 +212,7 @@ export async function POST(
     if (error instanceof GithubFetchError || error instanceof NpmFetchError) {
       return errorResponse(error.code, error.status);
     }
-    const message = error instanceof Error ? error.message : "Unknown error";
-    return errorResponse(message, 500);
+    return errorResponse(errorMessage(error), 500);
   }
 }
 
@@ -243,7 +228,6 @@ export async function GET(
     }
     return await listRuns();
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown error";
-    return errorResponse(message, 500);
+    return errorResponse(errorMessage(error), 500);
   }
 }

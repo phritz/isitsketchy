@@ -2,8 +2,11 @@
 // constants, unions, status-derivation helper, request/response types, and the
 // browser-facing client functions. Everything here is pure and browser-safe so
 // the route handler, orchestrator, and UI can all import the types + helpers.
-import { AxiosError } from "axios";
 import { browserApiClient } from "@/lib/api-client.browser";
+import { toError } from "@/lib/errors";
+
+export type { ErrorResponse } from "@/lib/errors";
+export { toError };
 
 export const RISK_SCORES = ["red", "yellow", "green"] as const;
 export type RiskScore = (typeof RISK_SCORES)[number];
@@ -42,6 +45,15 @@ export type AnalysisError = {
   code: string;
   message: string;
 };
+
+// A run/subject with a recorded error is always "failed"; otherwise its status
+// is derived from its results. Centralizes the pattern used across the route.
+export function resolveStatus(
+  error: AnalysisError | null,
+  results: { status: ResultStatus }[],
+): ResultStatus {
+  return error !== null ? "failed" : deriveStatus(results);
+}
 
 export type AnalysisResultData = {
   id: string;
@@ -108,24 +120,7 @@ export type ListAnalysesResponse = {
   data: AnalysisRunSummary[];
 };
 
-export type ErrorResponse = {
-  ok: false;
-  error: { message: string };
-};
-
 export const ENDPOINT: string = "/api/analysis";
-
-// Surface the server's `{ ok: false, error }` message instead of a generic
-// axios status string.
-export function toError(error: unknown): Error {
-  if (error instanceof AxiosError) {
-    const data = error.response?.data as ErrorResponse | undefined;
-    if (data && data.ok === false) {
-      return new Error(data.error.message);
-    }
-  }
-  return error instanceof Error ? error : new Error("Request failed");
-}
 
 export async function createAnalysis(repoUrl: string): Promise<{ id: string }> {
   try {

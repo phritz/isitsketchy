@@ -9,9 +9,6 @@ import axios, { AxiosError, type AxiosInstance } from "axios";
 import validatePackageNameLib from "validate-npm-package-name";
 import { RateLimiter, systemClock } from "@/lib/rate-limiter";
 
-// Bump when the cached `data` shape changes so stale rows are recognizable.
-export const NPM_SCHEMA_VERSION: number = 3;
-
 // Per-request timeout on outbound registry/downloads/deps.dev calls. Without it,
 // a hung upstream connection would stall the (sequential) analysis run
 // indefinitely. Failures surface as a per-subject error or null enrichment.
@@ -79,9 +76,8 @@ export type NpmDependents = {
   totalDependentCount: number | null;
 };
 
-// The versioned jsonb blob stored in `NpmPackage.data`.
+// The jsonb blob stored in `NpmPackage.data`.
 export type NpmPackageData = {
-  schemaVersion: number;
   packument: NpmPackument;
   latest: NpmLatestManifest | null;
   downloads: NpmDownloads | null;
@@ -404,7 +400,6 @@ export async function fetchNpmPackageData(
   const dependents: NpmDependents | null =
     latestVersion !== null ? await fetchDependents(name, latestVersion) : null;
   return {
-    schemaVersion: NPM_SCHEMA_VERSION,
     packument: distilled.packument,
     latest: distilled.latest,
     downloads,

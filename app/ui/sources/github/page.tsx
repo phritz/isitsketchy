@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   Anchor,
   Button,
@@ -17,48 +17,25 @@ import {
   listGithubRepos,
   type GithubRepoSummary,
 } from "@/app/api/sources/github/client";
+import { useAsyncData } from "@/lib/use-async-data";
 
 export default function GithubCachePage() {
-  const [rows, setRows] = useState<GithubRepoSummary[]>([]);
-  const [error, setError] = useState<string | null>(null);
+  const {
+    data,
+    error,
+    reload,
+    setError,
+  } = useAsyncData<GithubRepoSummary[]>(listGithubRepos, "Failed to load cache");
+  const rows: GithubRepoSummary[] = data ?? [];
   const [busyId, setBusyId] = useState<string | null>(null);
   const [clearing, setClearing] = useState<boolean>(false);
-
-  async function refresh(): Promise<void> {
-    setError(null);
-    try {
-      const data = await listGithubRepos();
-      setRows(data);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load cache");
-    }
-  }
-
-  useEffect(() => {
-    let active: boolean = true;
-    void (async () => {
-      try {
-        const data = await listGithubRepos();
-        if (active) {
-          setRows(data);
-        }
-      } catch (e) {
-        if (active) {
-          setError(e instanceof Error ? e.message : "Failed to load cache");
-        }
-      }
-    })();
-    return () => {
-      active = false;
-    };
-  }, []);
 
   async function onRemove(id: string): Promise<void> {
     setBusyId(id);
     setError(null);
     try {
       await deleteGithubRepo(id);
-      await refresh();
+      await reload();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to remove entry");
     } finally {
@@ -71,7 +48,7 @@ export default function GithubCachePage() {
     setError(null);
     try {
       await clearGithubRepos();
-      await refresh();
+      await reload();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to clear cache");
     } finally {

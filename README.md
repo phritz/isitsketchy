@@ -4,7 +4,8 @@ Is It Sketchy? shows trustworthiness signals for a GitHub repo or npm package, e
 
 It is a [Next.js](https://nextjs.org) (App Router, TypeScript) multi-page app using [Mantine](https://mantine.dev) for UI, backed by Postgres via Prisma. It is deployed to [Railway](https://railway.com) as a Docker image via the Railway CLI.
 
-See [APPROACH.md](APPROACH.md) for how I approached this project.
+See [APPROACH.md](APPROACH.md) for how I approached this project. [transcripts/](transcripts/) has the cursor transcripts for my coding sessions (ignore the "Implement the plan as specified, it is attached for your reference. Do NOT edit the plan file itself..." in there, that is auto-added by cursor). [plan/](plan/) has the planning docs that were 
+generated during the sessions.
 
 ## Code overview
 

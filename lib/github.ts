@@ -2,15 +2,12 @@
 //
 // All outbound GitHub calls are paced through the shared RateLimiter so we stay
 // under GitHub's primary and secondary rate limits. GitHub meters "core" and
-// "Search" independently, so we keep two module-level limiters. Only core is
-// used today (repo metadata + contents); the search limiter is here for the
-// upcoming issue-count signals so all callers share one bucket.
+// "Search" independently, so we keep two module-level limiters: `github-core`
+// (repo metadata, contents, contributors, commits) and `github-search` (the
+// issue-count signals). Callers of each share one bucket.
 import axios, { AxiosError, type AxiosInstance } from "axios";
 import { getGithubToken } from "@/lib/github-token";
 import { RateLimiter, systemClock } from "@/lib/rate-limiter";
-
-// Bump when the cached `data` shape changes so stale rows are recognizable.
-export const GITHUB_SCHEMA_VERSION: number = 3;
 
 const MS_PER_DAY: number = 1000 * 60 * 60 * 24;
 
@@ -43,9 +40,8 @@ export type GithubLicense = {
   url: string | null;
 };
 
-// The versioned jsonb blob stored in `GithubRepo.data`.
+// The jsonb blob stored in `GithubRepo.data`.
 export type GithubRepoData = {
-  schemaVersion: number;
   repo: GithubRepoInfo;
   packageJson: Record<string, unknown> | null;
   packageJsonMissing: boolean;
@@ -76,7 +72,8 @@ const githubCoreLimiter: RateLimiter = new RateLimiter({
   clock: systemClock,
 });
 
-// Reserved for the upcoming GitHub Search-backed signals (issue counts, etc.).
+// Meters the GitHub Search-backed signals (issue counts). Separate bucket
+// because GitHub rate-limits Search independently from core.
 export const githubSearchLimiter: RateLimiter = new RateLimiter({
   name: "github-search",
   limitPerMinute: 24,
@@ -342,7 +339,6 @@ export async function fetchGithubRepoData(
     fetchIssueCount(ownerRepo, "closed"),
   ]);
   return {
-    schemaVersion: GITHUB_SCHEMA_VERSION,
     repo,
     packageJson,
     packageJsonMissing: packageJson === null,

@@ -26,6 +26,32 @@ function monthsSince(isoTimestamp: string): number {
   return (Date.now() - new Date(isoTimestamp).getTime()) / MS_PER_MONTH;
 }
 
+// Three-band scoring for a metric where a higher value is healthier: green at
+// or above `greenAt`, yellow at or above `yellowAt`, otherwise red.
+function scoreHighGood(
+  value: number,
+  greenAt: number,
+  yellowAt: number,
+): RiskScore {
+  return value >= greenAt ? "green" : value >= yellowAt ? "yellow" : "red";
+}
+
+// Three-band scoring for a metric where a lower value is healthier (e.g. months
+// since last activity): green at or below `greenAt`, yellow at or below
+// `yellowAt`, otherwise red.
+function scoreLowGood(
+  value: number,
+  greenAt: number,
+  yellowAt: number,
+): RiskScore {
+  return value <= greenAt ? "green" : value <= yellowAt ? "yellow" : "red";
+}
+
+// `<count> <noun>` with the noun pluralized unless the count is exactly one.
+function pluralize(count: number, noun: string): string {
+  return `${count.toLocaleString()} ${noun}${count === 1 ? "" : "s"}`;
+}
+
 export const REPO_SIGNALS: SignalDef<RepoSignalContext>[] = [
   {
     id: "repo_last_push",
@@ -36,8 +62,7 @@ export const REPO_SIGNALS: SignalDef<RepoSignalContext>[] = [
         throw new Error("Repo has no pushed_at timestamp");
       }
       const months: number = monthsSince(pushedAt);
-      const riskScore: RiskScore =
-        months <= 1 ? "green" : months <= 6 ? "yellow" : "red";
+      const riskScore: RiskScore = scoreLowGood(months, 1, 6);
       return {
         riskScore,
         comment: `Last push ${Math.floor(months)} months ago (${pushedAt.slice(
@@ -55,13 +80,10 @@ export const REPO_SIGNALS: SignalDef<RepoSignalContext>[] = [
       if (count === null) {
         throw new Error("Contributor count unavailable");
       }
-      const riskScore: RiskScore =
-        count >= 10 ? "green" : count >= 2 ? "yellow" : "red";
+      const riskScore: RiskScore = scoreHighGood(count, 10, 2);
       return {
         riskScore,
-        comment: `${count.toLocaleString()} contributor${
-          count === 1 ? "" : "s"
-        }`,
+        comment: pluralize(count, "contributor"),
       };
     },
   },
@@ -73,13 +95,10 @@ export const REPO_SIGNALS: SignalDef<RepoSignalContext>[] = [
       if (count === null) {
         throw new Error("Commit count unavailable");
       }
-      const riskScore: RiskScore =
-        count >= 5 ? "green" : count >= 1 ? "yellow" : "red";
+      const riskScore: RiskScore = scoreHighGood(count, 5, 1);
       return {
         riskScore,
-        comment: `${count.toLocaleString()} commit${
-          count === 1 ? "" : "s"
-        } in the last 6 months`,
+        comment: `${pluralize(count, "commit")} in the last 6 months`,
       };
     },
   },
@@ -99,8 +118,7 @@ export const REPO_SIGNALS: SignalDef<RepoSignalContext>[] = [
         };
       }
       const ratio: number = closed / open;
-      const riskScore: RiskScore =
-        ratio >= 2 ? "green" : ratio >= 0.5 ? "yellow" : "red";
+      const riskScore: RiskScore = scoreHighGood(ratio, 2, 0.5);
       return {
         riskScore,
         comment: `${open.toLocaleString()} open / ${closed.toLocaleString()} closed issues (closed:open ${ratio.toFixed(
@@ -115,8 +133,7 @@ export const REPO_SIGNALS: SignalDef<RepoSignalContext>[] = [
     compute: ({ repo }: RepoSignalContext): SignalOutcome => {
       const createdAt: string = repo.repo.created_at;
       const months: number = monthsSince(createdAt);
-      const riskScore: RiskScore =
-        months >= 12 ? "green" : months >= 3 ? "yellow" : "red";
+      const riskScore: RiskScore = scoreHighGood(months, 12, 3);
       return {
         riskScore,
         comment: `Repo created ${Math.floor(
@@ -130,8 +147,7 @@ export const REPO_SIGNALS: SignalDef<RepoSignalContext>[] = [
     name: "GitHub stars",
     compute: ({ repo }: RepoSignalContext): SignalOutcome => {
       const stars: number = repo.repo.stargazers_count;
-      const riskScore: RiskScore =
-        stars >= 500 ? "green" : stars >= 50 ? "yellow" : "red";
+      const riskScore: RiskScore = scoreHighGood(stars, 500, 50);
       return {
         riskScore,
         comment: `${stars.toLocaleString()} stars`,
@@ -189,8 +205,7 @@ export const PACKAGE_SIGNALS: SignalDef<PackageSignalContext>[] = [
         throw new Error("Package has no created timestamp");
       }
       const months: number = monthsSince(created);
-      const riskScore: RiskScore =
-        months >= 12 ? "green" : months >= 3 ? "yellow" : "red";
+      const riskScore: RiskScore = scoreHighGood(months, 12, 3);
       return {
         riskScore,
         comment: `Package first published ${Math.floor(
@@ -211,8 +226,7 @@ export const PACKAGE_SIGNALS: SignalDef<PackageSignalContext>[] = [
         throw new Error("Package has no latest publish timestamp");
       }
       const months: number = monthsSince(publishedAt);
-      const riskScore: RiskScore =
-        months <= 6 ? "green" : months <= 18 ? "yellow" : "red";
+      const riskScore: RiskScore = scoreLowGood(months, 6, 18);
       return {
         riskScore,
         comment: `Latest version${
@@ -229,8 +243,7 @@ export const PACKAGE_SIGNALS: SignalDef<PackageSignalContext>[] = [
     name: "Maintainer count",
     compute: ({ npmPackage }: PackageSignalContext): SignalOutcome => {
       const count: number = npmPackage.packument.maintainers.length;
-      const riskScore: RiskScore =
-        count >= 2 ? "green" : count === 1 ? "yellow" : "red";
+      const riskScore: RiskScore = scoreHighGood(count, 2, 1);
       const comment: string =
         count === 0
           ? "No maintainers listed on npm"
@@ -282,8 +295,7 @@ export const PACKAGE_SIGNALS: SignalDef<PackageSignalContext>[] = [
       if (lastMonth === null || lastMonth === undefined) {
         throw new Error("Download counts unavailable");
       }
-      const riskScore: RiskScore =
-        lastMonth >= 100000 ? "green" : lastMonth >= 1000 ? "yellow" : "red";
+      const riskScore: RiskScore = scoreHighGood(lastMonth, 100000, 1000);
       return {
         riskScore,
         comment: `${lastMonth.toLocaleString()} downloads in the last month`,
@@ -350,8 +362,7 @@ export const PACKAGE_SIGNALS: SignalDef<PackageSignalContext>[] = [
       if (count === null) {
         throw new Error("Dependent count unavailable");
       }
-      const riskScore: RiskScore =
-        count >= 100 ? "green" : count >= 10 ? "yellow" : "red";
+      const riskScore: RiskScore = scoreHighGood(count, 100, 10);
       return {
         riskScore,
         comment: `${count.toLocaleString()} direct dependents (deps.dev)`,

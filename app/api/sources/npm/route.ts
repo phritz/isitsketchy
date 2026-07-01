@@ -6,6 +6,8 @@ import {
   NpmFetchError,
   type NpmPackageData,
 } from "@/lib/npm";
+import { errorMessage } from "@/lib/errors";
+import { errorResponse, NO_STORE_HEADERS } from "@/lib/api-response";
 import type {
   ErrorResponse,
   ListNpmPackagesResponse,
@@ -14,12 +16,6 @@ import type {
 } from "./client";
 
 export const dynamic = "force-dynamic";
-
-const NO_STORE_HEADERS: Record<string, string> = {
-  "Cache-Control": "no-store, no-cache, must-revalidate",
-  Pragma: "no-cache",
-  Expires: "0",
-};
 
 type NpmPackageRow = {
   id: string;
@@ -38,14 +34,6 @@ function serializeSummary(row: NpmPackageRow): NpmPackageSummary {
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
-}
-
-function errorResponse(
-  message: string,
-  status: number,
-): NextResponse<ErrorResponse> {
-  const body: ErrorResponse = { ok: false, error: { message } };
-  return NextResponse.json(body, { status, headers: NO_STORE_HEADERS });
 }
 
 async function readThrough(
@@ -104,8 +92,7 @@ export async function GET(
     if (error instanceof NpmFetchError) {
       return errorResponse(error.code, error.status);
     }
-    const message = error instanceof Error ? error.message : "Unknown error";
-    return errorResponse(message, 500);
+    return errorResponse(errorMessage(error), 500);
   }
 }
 
@@ -126,7 +113,6 @@ export async function DELETE(
     await prisma.npmPackage.delete({ where: { id: id.trim() } });
     return NextResponse.json({ ok: true }, { headers: NO_STORE_HEADERS });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown error";
-    return errorResponse(message, 500);
+    return errorResponse(errorMessage(error), 500);
   }
 }

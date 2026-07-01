@@ -16,6 +16,7 @@ import {
   type GithubRepoData,
 } from "@/lib/github";
 import type { NpmPackageData } from "@/lib/npm";
+import { errorMessage } from "@/lib/errors";
 import {
   PACKAGE_SIGNALS,
   REPO_SIGNALS,
@@ -37,10 +38,6 @@ const DEP_GROUPS: string[] = [
   "peerDependencies",
   "optionalDependencies",
 ];
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : "Unknown error";
-}
 
 // Best-effort resolution of a self-reported npm `repository.url` to a
 // normalized github.com URL. Returns null for missing / non-github / shorthand

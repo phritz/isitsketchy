@@ -27,6 +27,7 @@ I chose **Theme 1: Exploration & Understanding**, with elements of developer too
 - **Signals need tuning.** The signals probably need some tuning to be more useful.
 - **Direct dependencies only.** Right now I only analyze direct dependencies. There is no reason it couldn't recurse into transitive dependencies — the existing model supports it — I had just spent enough time already that I didn't implement it.
 - **Dev shares the production database.** Local development and production point at the same Postgres instance, so schema pushes from my machine also change production. This is a deliberate proof-of-concept simplification.
+- **Unify caches.** The GitHub and npm package caches are almost identical code, they could easily be unified.
 
 ## If I had more time
 
@@ -37,7 +38,8 @@ I chose **Theme 1: Exploration & Understanding**, with elements of developer too
 - **Failure modes.** I'd tighten up the failure modes and error handling, adding more unit tests. But this is 
 a proof of concept so I went light on that.
 - **SPEED.** Everything runs sequentially, there is a ton of room for parallelism.
+- **Unify caches.** The GitHub and npm package caches are almost identical code, they could easily be unified.
 
 ## Time spent
 
-About 4 hours implementing, with a lunch break. About another hour putting together the submission package, including this doc and the video.
+About 4 hours implementing, with a lunch break. About another hour putting together the submission package, including this doc and the video. And now I spent another 30m or so doing a few cleanups.

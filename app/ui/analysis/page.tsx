@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import {
   Anchor,
   Badge,
@@ -17,6 +16,7 @@ import {
   type AnalysisRunSummary,
   type ResultStatus,
 } from "@/app/api/analysis/client";
+import { useAsyncData } from "@/lib/use-async-data";
 
 function statusColor(status: ResultStatus): string {
   switch (status) {
@@ -33,32 +33,11 @@ function statusColor(status: ResultStatus): string {
 }
 
 export default function AnalysisListPage() {
-  const [rows, setRows] = useState<AnalysisRunSummary[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
-
-  useEffect(() => {
-    let active: boolean = true;
-    void (async () => {
-      try {
-        const data = await listAnalyses();
-        if (active) {
-          setRows(data);
-        }
-      } catch (e) {
-        if (active) {
-          setError(e instanceof Error ? e.message : "Failed to load analyses");
-        }
-      } finally {
-        if (active) {
-          setLoading(false);
-        }
-      }
-    })();
-    return () => {
-      active = false;
-    };
-  }, []);
+  const { data, error, loading } = useAsyncData<AnalysisRunSummary[]>(
+    listAnalyses,
+    "Failed to load analyses",
+  );
+  const rows: AnalysisRunSummary[] = data ?? [];
 
   return (
     <Container size="md" py="xl">

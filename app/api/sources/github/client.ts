@@ -1,8 +1,10 @@
-import { AxiosError } from "axios";
 import { browserApiClient } from "@/lib/api-client.browser";
+import { toError } from "@/lib/errors";
 import type { GithubRepoData } from "@/lib/github";
 
 export type { GithubRepoData } from "@/lib/github";
+export type { ErrorResponse } from "@/lib/errors";
+export { toError };
 
 export type GithubRepoMeta = {
   fetchedAt: string;
@@ -28,24 +30,7 @@ export type ListGithubReposResponse = {
   data: GithubRepoSummary[];
 };
 
-export type ErrorResponse = {
-  ok: false;
-  error: { message: string };
-};
-
 export const ENDPOINT: string = "/api/sources/github";
-
-// Surface the server's `{ ok: false, error }` message instead of a generic
-// axios status string.
-export function toError(error: unknown): Error {
-  if (error instanceof AxiosError) {
-    const data = error.response?.data as ErrorResponse | undefined;
-    if (data && data.ok === false) {
-      return new Error(data.error.message);
-    }
-  }
-  return error instanceof Error ? error : new Error("Request failed");
-}
 
 // Read-through fetch for a single repo. This is the call our own analysis code
 // uses; rows are created here as a side effect on a cache miss.
