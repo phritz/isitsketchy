@@ -28,6 +28,7 @@ I chose **Theme 1: Exploration & Understanding**, with elements of developer too
 - **Direct dependencies only.** Right now I only analyze direct dependencies. There is no reason it couldn't recurse into transitive dependencies — the existing model supports it — I had just spent enough time already that I didn't implement it.
 - **Dev shares the production database.** Local development and production point at the same Postgres instance, so schema pushes from my machine also change production. This is a deliberate proof-of-concept simplification.
 - **Unify caches.** The GitHub and npm package caches are almost identical code, they could easily be unified.
+- **Better timeout/handling of stuck analyses.** Very little went into this.
 
 ## If I had more time
 
