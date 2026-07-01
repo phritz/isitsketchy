@@ -50,6 +50,12 @@ Is there a better source than `package.json` for what actually runs? **No — th
   - `dist.signatures` — npm registry signing.
   - `--provenance` attestations (Sigstore) tie the tarball to a specific CI build; "does published code match the repo?" and "has provenance?" are strong trust signals to add later.
 
+## Nice to have
+
+| Signal | Difficulty | Source | Endpoint | Field / how to derive |
+| --- | --- | --- | --- | --- |
+| Sigstore provenance / attestations | Easy-ish (nice to have) | npm registry | `GET /-/npm/v1/attestations/{pkg}@{version}` | `attestations[]` with `predicateType`s `.../npm/attestation/.../publish/v0.1` and `https://slsa.dev/provenance/v1`. Present only for packages published with `--provenance`; ties the tarball to a specific GitHub Actions build via Sigstore. `404` = no provenance, which is itself a mild "less verifiable" signal. Verified: present on `sigstore@2.3.1`, absent (404) on `express@5.2.1`. Full trust would also verify the Sigstore signatures, but reading presence + the source repo/workflow in the predicate is a good first pass. |
+
 ## Notes / open questions
 
 - **Version to use for deps.dev / hooks:** default to `dist-tags.latest`. Consider also checking the most-downloaded version.

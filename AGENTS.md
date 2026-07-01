@@ -30,6 +30,14 @@ Conventions for working in the isitsketchy project. Follow these unless a task e
   - do not nest `try/catch` within a function
   - do not suppress errors in handlers
 
+## Database
+
+- Postgres via Prisma (Rust-free `prisma-client` generator + `@prisma/adapter-pg`).
+- One shared database for local dev and production (the Railway Postgres instance). `DATABASE_URL` points at the same DB in both environments.
+- We do NOT use Prisma migrations. Update the database schema directly with `npm run db:push` (`prisma db push`). Do not create or commit a `prisma/migrations/` directory.
+- Because dev and prod share one database, running `db:push` from your machine also updates production. This is a deliberate proof-of-concept simplification.
+- Access the client via the singleton in `lib/db.ts` (`import { prisma } from "@/lib/db"`). The generated client lives in `lib/generated/` and is gitignored (regenerated on install via the `postinstall` script).
+
 ## Types and Client
 
 - Every endpoint declares explicit request and response types: `FooRequest`, `FooResponse`.

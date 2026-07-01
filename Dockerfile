@@ -4,6 +4,8 @@
 FROM node:22-alpine AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
+# prisma schema is needed because the `postinstall` script runs `prisma generate`.
+COPY prisma ./prisma
 RUN npm ci
 
 # ---- Builder ----
@@ -12,6 +14,8 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
+# Regenerate the Rust-free Prisma client into the source tree (lib/generated).
+RUN npx prisma generate
 RUN npm run build
 
 # ---- Runner ----
@@ -30,6 +34,8 @@ RUN addgroup --system --gid 1001 nodejs \
 COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+# Ensure the generated Prisma client is present in the standalone runtime.
+COPY --from=builder --chown=nextjs:nodejs /app/lib/generated ./lib/generated
 
 USER nextjs
 

@@ -1,9 +1,5 @@
 import type { Metadata } from "next";
-import {
-  ColorSchemeScript,
-  MantineProvider,
-  mantineHtmlProps,
-} from "@mantine/core";
+import { MantineProvider, mantineHtmlProps } from "@mantine/core";
 import "@mantine/core/styles.css";
 import "./globals.css";
 
@@ -12,6 +8,10 @@ export const metadata: Metadata = {
   description: "Is It Sketchy?",
 };
 
+// The app is light-only for now. `mantineHtmlProps` statically sets
+// data-mantine-color-scheme="light", so Mantine's <ColorSchemeScript> (an inline
+// script that reads localStorage before hydration) is unnecessary. If a color
+// scheme toggle is added later, re-add <ColorSchemeScript /> inside <head>.
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -19,9 +19,6 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" {...mantineHtmlProps}>
-      <head>
-        <ColorSchemeScript />
-      </head>
       <body>
         <MantineProvider>{children}</MantineProvider>
       </body>

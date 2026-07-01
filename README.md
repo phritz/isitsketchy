@@ -11,6 +11,38 @@ npm run dev
 
 Then open http://localhost:3000.
 
+## Database
+
+Postgres via [Prisma](https://www.prisma.io) (Rust-free `prisma-client` generator with the `@prisma/adapter-pg` driver adapter).
+
+This project uses a **single shared database for both local development and production** (the Railway Postgres instance). We do **not** use Prisma migrations; the schema is pushed directly.
+
+### Setup
+
+1. Provision a Postgres database on Railway (Add service -> Database -> PostgreSQL). Railway sets `DATABASE_URL` on the `web` service automatically.
+2. For local development, copy the same connection string into a local `.env`:
+
+```bash
+cp .env.example .env
+# then paste the Railway Postgres URL into DATABASE_URL
+```
+
+3. Push the schema to the database (this updates the shared DB, i.e. production too):
+
+```bash
+npm run db:push
+```
+
+### Working with the schema
+
+- Edit `prisma/schema.prisma`, then run `npm run db:push` to apply changes directly. There are no migration files.
+- `npm run db:studio` opens Prisma Studio to browse/edit data.
+- The Prisma client is generated into `lib/generated/` (gitignored, regenerated on `npm install`). Import it via the singleton: `import { prisma } from "@/lib/db"`.
+
+> Note: because dev and prod share one database, `db:push` from your machine changes production. This is a deliberate proof-of-concept simplification; split the databases before real use.
+
+There is a scratch page at `/ui/test` that adds and lists rows in the `Repo` table to verify the DB wiring end to end.
+
 Other scripts:
 
 ```bash
