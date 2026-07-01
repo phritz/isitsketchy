@@ -34,7 +34,7 @@ Conventions for working in the isitsketchy project. Follow these unless a task e
 
 ## Auth
 
-- All `/ui/*` routes are behind HTTP Basic auth (`demo` / `notsketchy`), enforced in `middleware.ts`.
+- All `/ui/*` routes are behind HTTP Basic auth, enforced in `middleware.ts`.
 - All `/api/*` requests require the API token, sent as `Authorization: Bearer <token>`, validated in `middleware.ts`.
 - Requests to our API MUST be made through one of the token-attaching helpers below. Do not call `axios` directly from an API `client.ts`.
 - There are two clients, split by runtime so it is obvious which to use:
