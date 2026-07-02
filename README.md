@@ -1,6 +1,6 @@
 # Is It Sketchy?
 
-Is It Sketchy? shows trustworthiness signals for a GitHub repo or npm package, evaluating how "sketchy" it is based on repo and package metadata.
+Is It Sketchy? shows trustworthiness signals for a typscript/javascript GitHub repo or npm package, evaluating how "sketchy" it is based on repo and package metadata.
 
 It is a [Next.js](https://nextjs.org) (App Router, TypeScript) multi-page app using [Mantine](https://mantine.dev) for UI, backed by Postgres via Prisma. It is deployed to [Railway](https://railway.com) as a Docker image via the Railway CLI.
 
