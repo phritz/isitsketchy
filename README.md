@@ -1,3 +1,6 @@
+<div align="center"><img width="385" height="489" alt="js-ecosystem" src="https://github.com/user-attachments/assets/0361a5ee-3040-4187-aada-4f57dc8eab5b" /></div>
+
+
 # Is It Sketchy?
 
 Is It Sketchy? shows trustworthiness signals for a typscript/javascript GitHub repo or npm package, evaluating how "sketchy" it is based on repo and package metadata.
